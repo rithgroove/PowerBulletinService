@@ -1,0 +1,22 @@
+pluginManagement {
+    repositories {
+        mavenCentral()
+        gradlePluginPortal()
+    }
+}
+
+dependencyResolutionManagement {
+    repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+    repositories {
+        mavenCentral()
+        maven { url = 'https://repo.spring.io/snapshot' }
+    }
+}
+
+rootProject.name = 'pb-service'
+
+includeBuild('../tanuki-core') {
+    dependencySubstitution {
+        substitute module('com.nopunnygames.tanuki:tanuki-core') using project(':')
+    }
+}
