@@ -73,13 +73,20 @@ public class CardPrintSet extends MasterEntity<CardPrintSet, CardPrintSetDto> {
      * @param orderedPowers explicit ordered power values
      */
     public void replacePowers(List<Integer> orderedPowers) {
-        powers.clear();
         for (int index = 0; index < orderedPowers.size(); index++) {
-            CardPrintSetPower power = new CardPrintSetPower();
-            power.setCardPrintSet(this);
+            CardPrintSetPower power;
+            if (index < powers.size()) {
+                power = powers.get(index);
+            } else {
+                power = new CardPrintSetPower();
+                power.setCardPrintSet(this);
+                powers.add(power);
+            }
             power.setPowerOrder(index + 1);
             power.setPower(orderedPowers.get(index));
-            powers.add(power);
+        }
+        while (powers.size() > orderedPowers.size()) {
+            powers.remove(powers.size() - 1);
         }
     }
 
