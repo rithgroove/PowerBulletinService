@@ -102,6 +102,8 @@ public class PowerBulletinSeeder implements CommandLineRunner {
         upsertEffect("9e6c8198-751d-5870-a933-f2c65eb19274", "VILLAIN_TACTICIAN_V1", "power_bulletin.effects.implementations.power_bulletin_v1.villain_tactician_v1_effect.VillainTacticianV1Effect", "Villain Tactician v1", "Negates a pending effect.");
         upsertEffect("34e9bcb3-812d-5bbf-8f1d-b96b1fb0e956", "CIVILIAN_REPORTER_V1", "power_bulletin.effects.implementations.head_office_expansion_v1.civilian_reporter_v1_effect.CivilianReporterV1Effect", "Civilian Reporter v1", "When discarded, skips the current turn draw phase.");
         upsertEffect("949c2bbc-da04-57ad-aaa3-5f4c644c05b9", "CIVILIAN_SPY_V1", "power_bulletin.effects.implementations.head_office_expansion_v1.civilian_spy_v1_effect.CivilianSpyV1Effect", "Civilian Spy v1", "When discarded, the discarded player draws one card.");
+        upsertEffect("8a94b1a6-a999-5bc6-a8ee-1903e1bb0068", "VILLAIN_NECROMANCER_V1", "power_bulletin.effects.implementations.necromancer_underdog_v1.villain_necromancer_v1_effect.VillainNecromancerV1Effect", "Villain Necromancer v1", "Copies the effect of a legal action card from the discard pile.");
+        upsertEffect("94ebff96-2729-5d5d-86f5-3c7e5736ed57", "HERO_UNDERDOG_V1", "power_bulletin.effects.implementations.necromancer_underdog_v1.hero_underdog_v1_effect.HeroUnderdogV1Effect", "Hero Underdog v1", "Target opponent discards one card with power greater than Underdog's power.");
     }
 
     private void seedCards() {
@@ -117,6 +119,8 @@ public class PowerBulletinSeeder implements CommandLineRunner {
         upsertCard("e0951536-f520-4f5a-bfa5-0b27bb5f63eb", "VILLAIN_TACTICIAN", "TACTICIAN", "Caffe", Faction.VILLAIN, "1de288bf-5dc1-4683-ae7c-e6e93e03ac85", CardType.REACTION, "Negate the effect of a card.", "f82d61ab-baf8-40f0-bd9a-f3ffecc74584", List.of(1, 1, 2, 3));
         upsertCard("08745104-ed64-434f-9be2-44458b205e76", "CIVILIAN_REPORTER", "REPORTER", "Jenna Liss", Faction.CIVILIAN, "86dd5f34-6789-4eff-854c-2ec795d82ef8", CardType.ON_DISCARD, "On discard: Skip this turn draw phase.", "3dcb9ef5-e358-4c9d-b070-9ef81426996d", List.of(3, 3, 4, 5));
         upsertCard("abad2f60-5c85-4d0f-a082-6f2001d7e7fd", "CIVILIAN_SPY", "SPY", "Joe Schmoe / Cyph", Faction.CIVILIAN, "fee9e106-51ba-4ab4-bc39-838dee12016d", CardType.ON_DISCARD, "On discard: Draw a card.", "c7b75c6b-62c9-4dcb-8e3a-07a757e5462f", List.of(2, 2, 3, 4));
+        upsertCard("77f4f4c3-b6c6-5cf3-b359-e9d7ad785087", "VILLAIN_NECROMANCER", "NECROMANCER", "Mortis", Faction.VILLAIN, "bf031abd-1627-5ab6-bc7b-4e0119350adc", CardType.ACTION, "Copy the effect of a legal action card from the discard pile. Do not remove that card from the discard pile.", "b1df5dcb-5592-5a85-acf0-fdc338657487", List.of(2, 3, 3, 4));
+        upsertCard("c9c55308-ee28-5401-a1b8-fc095668a7bd", "HERO_UNDERDOG", "UNDERDOG", "Rookie", Faction.HERO, "da0a196d-185a-5898-8808-3f2ee27325e5", CardType.ACTION, "Target opponent discards one card with power greater than this card's power.", "06ae35f5-8612-5bf2-919d-cf1a6b1bbdd2", List.of(1, 1, 2, 2));
     }
 
     private void seedDecks() {

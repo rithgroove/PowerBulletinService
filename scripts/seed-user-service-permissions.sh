@@ -21,8 +21,8 @@ prompt() {
 DB_HOST="$(prompt "User-service DB host" "${PB_DB_HOST:-localhost}")"
 DB_PORT="$(prompt "User-service DB port" "${PB_DB_PORT:-5432}")"
 DB_NAME="$(prompt "User-service DB name" "${PB_DB_NAME:-user_service_db}")"
-DB_USER="$(prompt "User-service DB user" "${PB_DB_USER:-postgres}")"
-DB_PASSWORD="${PB_DB_PASSWORD:-}"
+DB_USER="$(prompt "User-service DB user" "${PB_DB_USER:-${DATABASE_USERNAME:-postgres}}")"
+DB_PASSWORD="${PB_DB_PASSWORD:-${DATABASE_PASSWORD:-}}"
 if [[ -z "$DB_PASSWORD" ]]; then
   read -r -s -p "User-service DB password: " DB_PASSWORD
   printf '\n'
@@ -54,8 +54,9 @@ BEGIN
 
     SELECT id INTO service_id
     FROM micro_service
-    WHERE code = 'POWER_BULLETIN'
+    WHERE (code IN ('POWER_BULLETIN', 'PB_SERVICE') OR name = 'Power Bulletin Service')
       AND deleted_at IS NULL
+    ORDER BY CASE WHEN code = 'POWER_BULLETIN' THEN 0 ELSE 1 END
     LIMIT 1;
 
     IF service_id IS NULL THEN
@@ -74,6 +75,7 @@ BEGIN
     ELSE
         UPDATE micro_service
         SET name = 'Power Bulletin Service',
+            code = 'POWER_BULLETIN',
             description = 'Power Bulletin canonical content and simulator result service',
             url = service_url,
             status = 'Active',
