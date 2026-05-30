@@ -4,6 +4,7 @@ import com.nopunnygames.pbservice.dto.DeckIdentityDto;
 import com.nopunnygames.pbservice.entity.DeckIdentity;
 import com.nopunnygames.pbservice.repository.DeckIdentityRepository;
 import com.nopunnygames.pbservice.service.DeckIdentityService;
+import com.nopunnygames.tanuki.core.controller.MasterController;
 import com.nopunnygames.tanuki.core.exception.ObjectNotFoundException;
 import com.nopunnygames.tanuki.core.response.ApiResponse;
 import org.springframework.http.ResponseEntity;
@@ -19,7 +20,7 @@ import java.util.UUID;
  */
 @RestController
 @RequestMapping("/decks")
-public class DeckIdentityController extends PublicMasterController<DeckIdentity, UUID, DeckIdentityDto> {
+public class DeckIdentityController extends MasterController<DeckIdentity, UUID, DeckIdentityDto> {
     private final DeckIdentityService service;
     private final DeckIdentityRepository repository;
 
@@ -32,7 +33,6 @@ public class DeckIdentityController extends PublicMasterController<DeckIdentity,
     public DeckIdentityController(DeckIdentityService service, DeckIdentityRepository repository) {
         this.service = service;
         this.repository = repository;
-        this.featureName = "DECK_IDENTITY";
     }
 
     @Override
@@ -51,5 +51,10 @@ public class DeckIdentityController extends PublicMasterController<DeckIdentity,
         DeckIdentity deck = repository.findByCode(code)
                 .orElseThrow(() -> new ObjectNotFoundException("Deck identity " + code + " not found"));
         return ResponseEntity.ok(new ApiResponse<>(200, deck.toCompleteDto()));
+    }
+
+    @Override
+    protected String getFeatureCode() {
+        return "DECK_IDENTITY";
     }
 }

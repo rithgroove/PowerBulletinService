@@ -4,6 +4,7 @@ import com.nopunnygames.pbservice.dto.CardVersionDto;
 import com.nopunnygames.pbservice.entity.CardVersion;
 import com.nopunnygames.pbservice.repository.CardVersionRepository;
 import com.nopunnygames.pbservice.service.CardVersionService;
+import com.nopunnygames.tanuki.core.controller.MasterController;
 import com.nopunnygames.tanuki.core.exception.ObjectNotFoundException;
 import com.nopunnygames.tanuki.core.response.ApiResponse;
 import org.springframework.http.ResponseEntity;
@@ -20,7 +21,7 @@ import java.util.UUID;
  */
 @RestController
 @RequestMapping("/card-versions")
-public class CardVersionController extends PublicMasterController<CardVersion, UUID, CardVersionDto> {
+public class CardVersionController extends MasterController<CardVersion, UUID, CardVersionDto> {
     private final CardVersionService service;
     private final CardVersionRepository repository;
 
@@ -33,7 +34,6 @@ public class CardVersionController extends PublicMasterController<CardVersion, U
     public CardVersionController(CardVersionService service, CardVersionRepository repository) {
         this.service = service;
         this.repository = repository;
-        this.featureName = "CARD_VERSION";
     }
 
     @Override
@@ -63,5 +63,10 @@ public class CardVersionController extends PublicMasterController<CardVersion, U
     @GetMapping("/by-card/{cardIdentityId}")
     public ResponseEntity<ApiResponse<List<CardVersionDto>>> listByCard(@PathVariable UUID cardIdentityId) {
         return ResponseEntity.ok(new ApiResponse<>(200, service.listByCardIdentity(cardIdentityId)));
+    }
+
+    @Override
+    protected String getFeatureCode() {
+        return "CARD_VERSION";
     }
 }

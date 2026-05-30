@@ -4,6 +4,7 @@ import com.nopunnygames.pbservice.dto.DeckVersionDto;
 import com.nopunnygames.pbservice.entity.DeckVersion;
 import com.nopunnygames.pbservice.repository.DeckVersionRepository;
 import com.nopunnygames.pbservice.service.DeckVersionService;
+import com.nopunnygames.tanuki.core.controller.MasterController;
 import com.nopunnygames.tanuki.core.exception.ObjectNotFoundException;
 import com.nopunnygames.tanuki.core.response.ApiResponse;
 import org.springframework.http.ResponseEntity;
@@ -20,7 +21,7 @@ import java.util.UUID;
  */
 @RestController
 @RequestMapping("/deck-versions")
-public class DeckVersionController extends PublicMasterController<DeckVersion, UUID, DeckVersionDto> {
+public class DeckVersionController extends MasterController<DeckVersion, UUID, DeckVersionDto> {
     private final DeckVersionService service;
     private final DeckVersionRepository repository;
 
@@ -33,7 +34,6 @@ public class DeckVersionController extends PublicMasterController<DeckVersion, U
     public DeckVersionController(DeckVersionService service, DeckVersionRepository repository) {
         this.service = service;
         this.repository = repository;
-        this.featureName = "DECK_VERSION";
     }
 
     @Override
@@ -63,5 +63,10 @@ public class DeckVersionController extends PublicMasterController<DeckVersion, U
     @GetMapping("/by-deck/{deckIdentityId}")
     public ResponseEntity<ApiResponse<List<DeckVersionDto>>> listByDeck(@PathVariable UUID deckIdentityId) {
         return ResponseEntity.ok(new ApiResponse<>(200, service.listByDeckIdentity(deckIdentityId)));
+    }
+
+    @Override
+    protected String getFeatureCode() {
+        return "DECK_VERSION";
     }
 }

@@ -4,6 +4,7 @@ import com.nopunnygames.pbservice.dto.EffectDefinitionDto;
 import com.nopunnygames.pbservice.entity.EffectDefinition;
 import com.nopunnygames.pbservice.repository.EffectDefinitionRepository;
 import com.nopunnygames.pbservice.service.EffectDefinitionService;
+import com.nopunnygames.tanuki.core.controller.MasterController;
 import com.nopunnygames.tanuki.core.exception.ObjectNotFoundException;
 import com.nopunnygames.tanuki.core.response.ApiResponse;
 import org.springframework.http.ResponseEntity;
@@ -19,7 +20,7 @@ import java.util.UUID;
  */
 @RestController
 @RequestMapping("/effects")
-public class EffectDefinitionController extends PublicMasterController<EffectDefinition, UUID, EffectDefinitionDto> {
+public class EffectDefinitionController extends MasterController<EffectDefinition, UUID, EffectDefinitionDto> {
     private final EffectDefinitionService service;
     private final EffectDefinitionRepository repository;
 
@@ -32,7 +33,6 @@ public class EffectDefinitionController extends PublicMasterController<EffectDef
     public EffectDefinitionController(EffectDefinitionService service, EffectDefinitionRepository repository) {
         this.service = service;
         this.repository = repository;
-        this.featureName = "EFFECT_DEFINITION";
     }
 
     @Override
@@ -51,5 +51,10 @@ public class EffectDefinitionController extends PublicMasterController<EffectDef
         EffectDefinition effect = repository.findByCode(code)
                 .orElseThrow(() -> new ObjectNotFoundException("Effect definition " + code + " not found"));
         return ResponseEntity.ok(new ApiResponse<>(200, effect.toCompleteDto()));
+    }
+
+    @Override
+    protected String getFeatureCode() {
+        return "EFFECT_DEFINITION";
     }
 }

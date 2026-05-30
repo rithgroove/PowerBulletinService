@@ -7,6 +7,9 @@ deck versions, and deck entries.
 The Python simulator still owns gameplay execution. This service only stores and exports
 canonical data that the simulator and CMS can consume.
 
+The service uses Tanuki Core `0.0.4-SNAPSHOT` for CRUD controllers, response
+wrappers, pagination metadata, validation errors, and JWT principal wiring.
+
 ## Relationship To Other Projects
 
 - `pb-simulator`: runs simulations and executes Python effect classes from `EffectDefinition.pythonClass`.
@@ -88,3 +91,16 @@ The service seeds the known base and Head Office records by default. Disable it 
 ```bash
 SEED_POWER_BULLETIN_ENABLED=false
 ```
+
+## User-Service Permissions
+
+This service owns its user-service permission seed script:
+
+```bash
+./scripts/seed-user-service-permissions.sh
+```
+
+The script prompts for the user-service database connection, then idempotently
+seeds the `POWER_BULLETIN` microservice, CRUD feature codes used by this
+service's Tanuki controllers, standard CRUD subfeatures, and `SUPER_ADMIN` ACLs
+when that role exists.

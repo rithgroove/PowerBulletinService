@@ -3,6 +3,7 @@ package com.nopunnygames.pbservice.controller;
 import com.nopunnygames.pbservice.dto.DeckEntryDto;
 import com.nopunnygames.pbservice.entity.DeckEntry;
 import com.nopunnygames.pbservice.service.DeckEntryService;
+import com.nopunnygames.tanuki.core.controller.BaseController;
 import com.nopunnygames.tanuki.core.response.ApiResponse;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -18,7 +19,7 @@ import java.util.UUID;
  */
 @RestController
 @RequestMapping("/deck-entries")
-public class DeckEntryController extends PublicBaseController<DeckEntry, UUID, DeckEntryDto> {
+public class DeckEntryController extends BaseController<DeckEntry, UUID, DeckEntryDto> {
     private final DeckEntryService service;
 
     /**
@@ -28,7 +29,6 @@ public class DeckEntryController extends PublicBaseController<DeckEntry, UUID, D
      */
     public DeckEntryController(DeckEntryService service) {
         this.service = service;
-        this.featureName = "DECK_ENTRY";
     }
 
     @Override
@@ -45,5 +45,10 @@ public class DeckEntryController extends PublicBaseController<DeckEntry, UUID, D
     @GetMapping("/by-version/{deckVersionId}")
     public ResponseEntity<ApiResponse<List<DeckEntryDto>>> listByDeckVersion(@PathVariable UUID deckVersionId) {
         return ResponseEntity.ok(new ApiResponse<>(200, service.listByDeckVersion(deckVersionId)));
+    }
+
+    @Override
+    protected String getFeatureCode() {
+        return "DECK_ENTRY";
     }
 }

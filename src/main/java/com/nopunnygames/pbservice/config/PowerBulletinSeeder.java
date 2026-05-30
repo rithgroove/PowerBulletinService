@@ -152,7 +152,9 @@ public class PowerBulletinSeeder implements CommandLineRunner {
         printSet.setCode(identityCode + "_V1_STANDARD");
         printSet.setCardVersion(version);
         printSet.setStatus("Active");
-        printSet.replacePowers(powers);
+        if (!printSet.getPowers().stream().map(power -> power.getPower()).toList().equals(powers)) {
+            printSet.replacePowers(powers);
+        }
         cardPrintSetRepository.save(printSet);
     }
 
