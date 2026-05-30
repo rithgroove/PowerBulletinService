@@ -4,6 +4,7 @@ import com.nopunnygames.pbservice.dto.CardIdentityDto;
 import com.nopunnygames.pbservice.entity.CardIdentity;
 import com.nopunnygames.pbservice.repository.CardIdentityRepository;
 import com.nopunnygames.pbservice.service.CardIdentityService;
+import com.nopunnygames.tanuki.core.controller.MasterController;
 import com.nopunnygames.tanuki.core.exception.ObjectNotFoundException;
 import com.nopunnygames.tanuki.core.response.ApiResponse;
 import org.springframework.http.ResponseEntity;
@@ -19,7 +20,7 @@ import java.util.UUID;
  */
 @RestController
 @RequestMapping("/cards")
-public class CardIdentityController extends PublicMasterController<CardIdentity, UUID, CardIdentityDto> {
+public class CardIdentityController extends MasterController<CardIdentity, UUID, CardIdentityDto> {
     private final CardIdentityService service;
     private final CardIdentityRepository repository;
 
@@ -32,7 +33,6 @@ public class CardIdentityController extends PublicMasterController<CardIdentity,
     public CardIdentityController(CardIdentityService service, CardIdentityRepository repository) {
         this.service = service;
         this.repository = repository;
-        this.featureName = "CARD_IDENTITY";
     }
 
     @Override
@@ -51,5 +51,10 @@ public class CardIdentityController extends PublicMasterController<CardIdentity,
         CardIdentity card = repository.findByCode(code)
                 .orElseThrow(() -> new ObjectNotFoundException("Card identity " + code + " not found"));
         return ResponseEntity.ok(new ApiResponse<>(200, card.toCompleteDto()));
+    }
+
+    @Override
+    protected String getFeatureCode() {
+        return "CARD_IDENTITY";
     }
 }

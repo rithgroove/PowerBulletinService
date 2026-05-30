@@ -22,7 +22,7 @@ configurations {
 }
 
 dependencies {
-    implementation 'com.nopunnygames.tanuki:tanuki-core:0.0.2-SNAPSHOT'
+    implementation 'com.nopunnygames.tanuki:tanuki-core:0.0.4-SNAPSHOT'
     implementation 'org.springframework.boot:spring-boot-starter-web'
     implementation 'org.springframework.boot:spring-boot-starter-validation'
     implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
@@ -40,6 +40,22 @@ dependencies {
 
 tasks.named('test') {
     useJUnitPlatform()
+}
+
+tasks.named('bootRun') {
+    File envFile = file('.env')
+    if (envFile.exists()) {
+        envFile.eachLine { line ->
+            String trimmed = line.trim()
+            if (!trimmed || trimmed.startsWith('#') || !trimmed.contains('=')) {
+                return
+            }
+            int separator = trimmed.indexOf('=')
+            String key = trimmed.substring(0, separator).trim()
+            String value = trimmed.substring(separator + 1).trim()
+            environment key, value
+        }
+    }
 }
 
 tasks.withType(Javadoc).configureEach {

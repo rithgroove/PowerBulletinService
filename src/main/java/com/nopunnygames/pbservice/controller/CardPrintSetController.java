@@ -4,6 +4,7 @@ import com.nopunnygames.pbservice.dto.CardPrintSetDto;
 import com.nopunnygames.pbservice.entity.CardPrintSet;
 import com.nopunnygames.pbservice.repository.CardPrintSetRepository;
 import com.nopunnygames.pbservice.service.CardPrintSetService;
+import com.nopunnygames.tanuki.core.controller.MasterController;
 import com.nopunnygames.tanuki.core.exception.ObjectNotFoundException;
 import com.nopunnygames.tanuki.core.response.ApiResponse;
 import org.springframework.http.ResponseEntity;
@@ -20,7 +21,7 @@ import java.util.UUID;
  */
 @RestController
 @RequestMapping("/card-print-sets")
-public class CardPrintSetController extends PublicMasterController<CardPrintSet, UUID, CardPrintSetDto> {
+public class CardPrintSetController extends MasterController<CardPrintSet, UUID, CardPrintSetDto> {
     private final CardPrintSetService service;
     private final CardPrintSetRepository repository;
 
@@ -33,7 +34,6 @@ public class CardPrintSetController extends PublicMasterController<CardPrintSet,
     public CardPrintSetController(CardPrintSetService service, CardPrintSetRepository repository) {
         this.service = service;
         this.repository = repository;
-        this.featureName = "CARD_PRINT_SET";
     }
 
     @Override
@@ -63,5 +63,10 @@ public class CardPrintSetController extends PublicMasterController<CardPrintSet,
     @GetMapping("/by-version/{cardVersionId}")
     public ResponseEntity<ApiResponse<List<CardPrintSetDto>>> listByVersion(@PathVariable UUID cardVersionId) {
         return ResponseEntity.ok(new ApiResponse<>(200, service.listByCardVersion(cardVersionId)));
+    }
+
+    @Override
+    protected String getFeatureCode() {
+        return "CARD_PRINT_SET";
     }
 }
