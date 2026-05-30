@@ -7,8 +7,12 @@ import com.nopunnygames.pbservice.entity.DeckEntry;
 import com.nopunnygames.pbservice.entity.DeckIdentity;
 import com.nopunnygames.pbservice.entity.DeckVersion;
 import com.nopunnygames.pbservice.entity.EffectDefinition;
+import com.nopunnygames.pbservice.entity.Product;
+import com.nopunnygames.pbservice.entity.ProductItem;
 import com.nopunnygames.pbservice.enums.CardType;
 import com.nopunnygames.pbservice.enums.Faction;
+import com.nopunnygames.pbservice.enums.ProductReleaseStatus;
+import com.nopunnygames.pbservice.enums.ProductType;
 import com.nopunnygames.pbservice.repository.CardIdentityRepository;
 import com.nopunnygames.pbservice.repository.CardPrintSetRepository;
 import com.nopunnygames.pbservice.repository.CardVersionRepository;
@@ -16,6 +20,8 @@ import com.nopunnygames.pbservice.repository.DeckEntryRepository;
 import com.nopunnygames.pbservice.repository.DeckIdentityRepository;
 import com.nopunnygames.pbservice.repository.DeckVersionRepository;
 import com.nopunnygames.pbservice.repository.EffectDefinitionRepository;
+import com.nopunnygames.pbservice.repository.ProductItemRepository;
+import com.nopunnygames.pbservice.repository.ProductRepository;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
@@ -36,6 +42,8 @@ public class PowerBulletinSeeder implements CommandLineRunner {
     private final DeckIdentityRepository deckIdentityRepository;
     private final DeckVersionRepository deckVersionRepository;
     private final DeckEntryRepository deckEntryRepository;
+    private final ProductRepository productRepository;
+    private final ProductItemRepository productItemRepository;
 
     /**
      * Creates the seeder.
@@ -47,6 +55,8 @@ public class PowerBulletinSeeder implements CommandLineRunner {
      * @param deckIdentityRepository deck identity repository
      * @param deckVersionRepository deck version repository
      * @param deckEntryRepository deck entry repository
+     * @param productRepository product repository
+     * @param productItemRepository product item repository
      */
     public PowerBulletinSeeder(
             EffectDefinitionRepository effectRepository,
@@ -55,7 +65,9 @@ public class PowerBulletinSeeder implements CommandLineRunner {
             CardPrintSetRepository cardPrintSetRepository,
             DeckIdentityRepository deckIdentityRepository,
             DeckVersionRepository deckVersionRepository,
-            DeckEntryRepository deckEntryRepository
+            DeckEntryRepository deckEntryRepository,
+            ProductRepository productRepository,
+            ProductItemRepository productItemRepository
     ) {
         this.effectRepository = effectRepository;
         this.cardIdentityRepository = cardIdentityRepository;
@@ -64,6 +76,8 @@ public class PowerBulletinSeeder implements CommandLineRunner {
         this.deckIdentityRepository = deckIdentityRepository;
         this.deckVersionRepository = deckVersionRepository;
         this.deckEntryRepository = deckEntryRepository;
+        this.productRepository = productRepository;
+        this.productItemRepository = productItemRepository;
     }
 
     @Override
@@ -71,6 +85,7 @@ public class PowerBulletinSeeder implements CommandLineRunner {
     public void run(String... args) {
         seedEffects();
         seedCards();
+        seedProducts();
         seedDecks();
     }
 
@@ -118,6 +133,20 @@ public class PowerBulletinSeeder implements CommandLineRunner {
         }
     }
 
+    private void seedProducts() {
+        Product core = upsertProduct("POWER_BULLETIN_CORE", "Power Bulletin Core", "Core Power Bulletin product.", ProductType.CORE, 10);
+        int sortOrder = 1;
+        for (String printSetCode : List.of("HERO_ATTACKER_V1_STANDARD", "HERO_HITMAN_V1_STANDARD", "HERO_HEALER_V1_STANDARD", "HERO_SEER_V1_STANDARD", "HERO_GUARD_V1_STANDARD", "VILLAIN_ATTACKER_V1_STANDARD", "VILLAIN_PROVOCATEUR_V1_STANDARD", "VILLAIN_GAMBLER_V1_STANDARD", "VILLAIN_VENGEANCE_V1_STANDARD", "VILLAIN_TACTICIAN_V1_STANDARD")) {
+            upsertProductItem(core, printSetCode, sortOrder++);
+        }
+
+        Product headOffice = upsertProduct("HEAD_OFFICE_EXPANSION", "Head Office Expansion", "Head Office expansion product.", ProductType.EXPANSION, 20);
+        sortOrder = 1;
+        for (String printSetCode : List.of("CIVILIAN_REPORTER_V1_STANDARD", "CIVILIAN_SPY_V1_STANDARD")) {
+            upsertProductItem(headOffice, printSetCode, sortOrder++);
+        }
+    }
+
     private EffectDefinition upsertEffect(String id, String code, String pythonClass, String name, String description) {
         EffectDefinition effect = effectRepository.findByCode(code).orElseGet(EffectDefinition::new);
         effect.setCode(code);
@@ -126,6 +155,29 @@ public class PowerBulletinSeeder implements CommandLineRunner {
         effect.setDescription(description);
         effect.setStatus("Active");
         return effectRepository.save(effect);
+    }
+
+    private Product upsertProduct(String code, String name, String description, ProductType productType, int displayOrder) {
+        Product product = productRepository.findByCode(code).orElseGet(Product::new);
+        product.setCode(code);
+        product.setName(name);
+        product.setDescription(description);
+        product.setProductType(productType);
+        product.setReleaseStatus(ProductReleaseStatus.ACTIVE);
+        product.setDisplayOrder(displayOrder);
+        product.setStatus("Active");
+        return productRepository.save(product);
+    }
+
+    private void upsertProductItem(Product product, String printSetCode, int sortOrder) {
+        CardPrintSet printSet = cardPrintSetRepository.findByCode(printSetCode).orElseThrow();
+        ProductItem item = productItemRepository.findActiveByProductIdAndCardPrintSetId(product.getId(), printSet.getId()).orElseGet(ProductItem::new);
+        item.setProduct(product);
+        item.setCardPrintSet(printSet);
+        item.setQuantity(1);
+        item.setSortOrder(sortOrder);
+        item.setStatus("Active");
+        productItemRepository.save(item);
     }
 
     private void upsertCard(String identityId, String identityCode, String name, String characterName, Faction faction, String versionId, CardType cardType, String effectText, String printSetId, List<Integer> powers) {

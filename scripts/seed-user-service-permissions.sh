@@ -1,6 +1,15 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+WORKSPACE_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+USER_SERVICE_ENV="$WORKSPACE_ROOT/user-service/.env"
+if [[ -f "$USER_SERVICE_ENV" ]]; then
+  set -a
+  # shellcheck disable=SC1090
+  source "$USER_SERVICE_ENV"
+  set +a
+fi
+
 prompt() {
   local name="$1"
   local default="$2"
@@ -9,13 +18,16 @@ prompt() {
   printf '%s' "${value:-$default}"
 }
 
-DB_HOST="$(prompt "User-service DB host" "localhost")"
-DB_PORT="$(prompt "User-service DB port" "5432")"
-DB_NAME="$(prompt "User-service DB name" "user_service_db")"
-DB_USER="$(prompt "User-service DB user" "postgres")"
-read -r -s -p "User-service DB password: " DB_PASSWORD
-printf '\n'
-SERVICE_URL="$(prompt "Power Bulletin service URL" "http://localhost:8083")"
+DB_HOST="$(prompt "User-service DB host" "${PB_DB_HOST:-localhost}")"
+DB_PORT="$(prompt "User-service DB port" "${PB_DB_PORT:-5432}")"
+DB_NAME="$(prompt "User-service DB name" "${PB_DB_NAME:-user_service_db}")"
+DB_USER="$(prompt "User-service DB user" "${PB_DB_USER:-postgres}")"
+DB_PASSWORD="${PB_DB_PASSWORD:-}"
+if [[ -z "$DB_PASSWORD" ]]; then
+  read -r -s -p "User-service DB password: " DB_PASSWORD
+  printf '\n'
+fi
+SERVICE_URL="$(prompt "Power Bulletin service URL" "${POWER_BULLETIN_SERVICE_URL:-http://localhost:8083}")"
 
 export PGPASSWORD="$DB_PASSWORD"
 psql -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d "$DB_NAME" -v ON_ERROR_STOP=1 -v service_url="$SERVICE_URL" <<'SQL'
@@ -69,17 +81,36 @@ BEGIN
         WHERE id = service_id;
     END IF;
 
+    DELETE FROM roles_access_clearance_level acl
+    USING subfeatures sf, features f
+    WHERE acl.sub_features_id = sf.id
+      AND sf.feature_id = f.id
+      AND f.micro_service_id = service_id
+      AND f.code = 'POWERBULLETIN';
+
+    DELETE FROM subfeatures sf
+    USING features f
+    WHERE sf.feature_id = f.id
+      AND f.micro_service_id = service_id
+      AND f.code = 'POWERBULLETIN';
+
+    DELETE FROM features
+    WHERE micro_service_id = service_id
+      AND code = 'POWERBULLETIN';
+
     FOR feature_row IN
         SELECT *
         FROM (VALUES
-            ('CARD_IDENTITY', 'Card Identity', 'Power Bulletin card identity records'),
-            ('CARD_VERSION', 'Card Version', 'Power Bulletin card version records'),
-            ('CARD_PRINT_SET', 'Card Print Set', 'Power Bulletin card print set records'),
-            ('EFFECT_DEFINITION', 'Effect Definition', 'Power Bulletin effect definition records'),
-            ('DECK_IDENTITY', 'Deck Identity', 'Power Bulletin deck identity records'),
-            ('DECK_VERSION', 'Deck Version', 'Power Bulletin deck version records'),
-            ('DECK_ENTRY', 'Deck Entry', 'Power Bulletin deck entry records')
-        ) AS seed(code, name, description)
+            ('CARD_IDENTITY', 'Card Identity', 'Power Bulletin card identity records', ARRAY['INDEX','READ','CREATE','UPDATE','DELETE','ACTIVATE','DEACTIVATE']),
+            ('CARD_VERSION', 'Card Version', 'Power Bulletin card version records', ARRAY['INDEX','READ','CREATE','UPDATE','DELETE','ACTIVATE','DEACTIVATE']),
+            ('CARD_PRINT_SET', 'Card Print Set', 'Power Bulletin card print set records', ARRAY['INDEX','READ','CREATE','UPDATE','DELETE','ACTIVATE','DEACTIVATE']),
+            ('EFFECT_DEFINITION', 'Effect Definition', 'Power Bulletin effect definition records', ARRAY['INDEX','READ','CREATE','UPDATE','DELETE','ACTIVATE','DEACTIVATE']),
+            ('DECK_IDENTITY', 'Deck Identity', 'Power Bulletin deck identity records', ARRAY['INDEX','READ','CREATE','UPDATE','DELETE','ACTIVATE','DEACTIVATE']),
+            ('DECK_VERSION', 'Deck Version', 'Power Bulletin deck version records', ARRAY['INDEX','READ','CREATE','UPDATE','DELETE','ACTIVATE','DEACTIVATE']),
+            ('DECK_ENTRY', 'Deck Entry', 'Power Bulletin deck entry records', ARRAY['INDEX','READ','CREATE','UPDATE','DELETE','ACTIVATE','DEACTIVATE']),
+            ('PB_PRODUCT', 'Power Bulletin Product', 'Power Bulletin product records', ARRAY['INDEX','READ','CREATE','UPDATE','DELETE','ACTIVATE','DEACTIVATE']),
+            ('PB_RECORDS', 'Power Bulletin Records', 'Power Bulletin simulator run and metric records', ARRAY['INDEX','READ'])
+        ) AS seed(code, name, description, permissions)
     LOOP
         SELECT id INTO current_feature_id
         FROM features
@@ -112,6 +143,7 @@ BEGIN
                 ('ACTIVATE', 'Activate', 'Activate ' || lower(feature_row.name) || ' records', false),
                 ('DEACTIVATE', 'Deactivate', 'Deactivate ' || lower(feature_row.name) || ' records', false)
             ) AS seed(code, name, description, public_access)
+            WHERE seed.code = ANY(feature_row.permissions)
         LOOP
             SELECT id INTO subfeature_id
             FROM subfeatures

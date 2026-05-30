@@ -120,14 +120,13 @@ public class DeckEntryService extends BaseService<DeckEntry, UUID, DeckEntryDto>
     private void fillEntity(DeckEntry entity, DeckEntryDto dto, DeckVersion deckVersion, CardPrintSet cardPrintSet) {
         entity.setDeckVersion(deckVersion);
         entity.setCardPrintSet(cardPrintSet);
-        entity.setQuantity(dto.getQuantity());
+        entity.setQuantity(1);
     }
 
     private List<ValidationError> validate(DeckEntryDto dto) {
         List<ValidationError> errors = new ArrayList<>();
         if (dto.getDeckVersionId() == null) errors.add(new ValidationError("deckVersionId", "Deck version is required."));
         if (dto.getCardPrintSetId() == null) errors.add(new ValidationError("cardPrintSetId", "Card print set is required."));
-        if (dto.getQuantity() < 1) errors.add(new ValidationError("quantity", "Quantity must be at least 1."));
         return errors;
     }
 }

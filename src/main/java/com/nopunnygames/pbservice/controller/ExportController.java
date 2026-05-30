@@ -2,6 +2,7 @@ package com.nopunnygames.pbservice.controller;
 
 import com.nopunnygames.pbservice.dto.CardIdentityDto;
 import com.nopunnygames.pbservice.dto.DeckExportDto;
+import com.nopunnygames.pbservice.dto.ProductExportDto;
 import com.nopunnygames.pbservice.service.PowerBulletinExportService;
 import com.nopunnygames.tanuki.core.response.ApiResponse;
 import org.springframework.http.ResponseEntity;
@@ -70,5 +71,15 @@ public class ExportController {
     @GetMapping("/base-game")
     public ResponseEntity<ApiResponse<DeckExportDto>> baseGameExport() {
         return ResponseEntity.ok(new ApiResponse<>(200, service.getDeckExportByCode("STANDARD_POWER_BULLETIN_V0_0")));
+    }
+
+    /**
+     * Returns active products and their print set quantities.
+     *
+     * @return product export response
+     */
+    @GetMapping("/products")
+    public ResponseEntity<ApiResponse<ProductExportDto>> productExport() {
+        return ResponseEntity.ok(new ApiResponse<>(200, service.getProductExport()));
     }
 }

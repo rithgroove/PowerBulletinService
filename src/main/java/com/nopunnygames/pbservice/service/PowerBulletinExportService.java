@@ -2,6 +2,7 @@ package com.nopunnygames.pbservice.service;
 
 import com.nopunnygames.pbservice.dto.CardIdentityDto;
 import com.nopunnygames.pbservice.dto.DeckExportDto;
+import com.nopunnygames.pbservice.dto.ProductExportDto;
 import com.nopunnygames.pbservice.dto.ResolvedDeckEntryDto;
 import com.nopunnygames.pbservice.entity.CardIdentity;
 import com.nopunnygames.pbservice.entity.DeckEntry;
@@ -24,6 +25,7 @@ public class PowerBulletinExportService {
     private final CardIdentityRepository cardIdentityRepository;
     private final DeckVersionRepository deckVersionRepository;
     private final DeckEntryRepository deckEntryRepository;
+    private final ProductService productService;
 
     /**
      * Creates the export service.
@@ -31,15 +33,18 @@ public class PowerBulletinExportService {
      * @param cardIdentityRepository card identity repository
      * @param deckVersionRepository deck version repository
      * @param deckEntryRepository deck entry repository
+     * @param productService product service
      */
     public PowerBulletinExportService(
             CardIdentityRepository cardIdentityRepository,
             DeckVersionRepository deckVersionRepository,
-            DeckEntryRepository deckEntryRepository
+            DeckEntryRepository deckEntryRepository,
+            ProductService productService
     ) {
         this.cardIdentityRepository = cardIdentityRepository;
         this.deckVersionRepository = deckVersionRepository;
         this.deckEntryRepository = deckEntryRepository;
+        this.productService = productService;
     }
 
     /**
@@ -79,6 +84,18 @@ public class PowerBulletinExportService {
         DeckVersion deckVersion = deckVersionRepository.findByCode(code)
                 .orElseThrow(() -> new ObjectNotFoundException("Deck version " + code + " not found"));
         return buildDeckExport(deckVersion);
+    }
+
+    /**
+     * Returns active products with resolved product items.
+     *
+     * @return product export DTO
+     */
+    @Transactional(readOnly = true)
+    public ProductExportDto getProductExport() {
+        ProductExportDto export = new ProductExportDto();
+        export.setProducts(productService.exportProducts());
+        return export;
     }
 
     private DeckExportDto buildDeckExport(DeckVersion deckVersion) {

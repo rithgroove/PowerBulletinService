@@ -175,10 +175,11 @@ public class CmsQueryController {
             @RequestParam(defaultValue = "") String cardType,
             @RequestParam(name = "sort_by", defaultValue = "faction") String sortBy,
             @RequestParam(name = "sort_direction", defaultValue = "asc") String sortDirection,
+            @RequestParam(name = "is_paginate", defaultValue = "true") boolean isPaginate,
             @RequestParam(defaultValue = "1") int page,
             @RequestParam(defaultValue = "10") int limit
     ) {
-        return ResponseEntity.ok(new ApiResponse<>(200, paged(queryService.listDeckEntries(deckVersionId, search, faction, cardType, sortBy, sortDirection), page, limit)));
+        return ResponseEntity.ok(new ApiResponse<>(200, paged(queryService.listDeckEntries(deckVersionId, search, faction, cardType, sortBy, sortDirection), page, limit, isPaginate)));
     }
 
     /**
@@ -253,6 +254,13 @@ public class CmsQueryController {
     }
 
     private PagedResponse<Map<String, Object>> paged(List<Map<String, Object>> rows, int page, int limit) {
+        return paged(rows, page, limit, true);
+    }
+
+    private PagedResponse<Map<String, Object>> paged(List<Map<String, Object>> rows, int page, int limit, boolean isPaginate) {
+        if (!isPaginate) {
+            return new PagedResponse<>(rows, new PageMeta(1, rows.size(), rows.size(), 1));
+        }
         int safeLimit = Math.max(1, Math.min(100, limit));
         int totalPages = Math.max(1, (int) Math.ceil((double) rows.size() / safeLimit));
         int safePage = Math.max(1, Math.min(page, totalPages));
