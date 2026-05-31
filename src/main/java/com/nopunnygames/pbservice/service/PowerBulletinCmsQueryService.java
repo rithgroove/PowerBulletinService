@@ -4,6 +4,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -523,15 +524,50 @@ public class PowerBulletinCmsQueryService {
                 JOIN deck_identities di ON di.id = dv.deck_identity_id
                 WHERE sr.id = ?
                 """, runId);
-        return Map.of(
-                "run", run,
-                "metrics", optionalQueryForMap("SELECT * FROM run_metric_summaries WHERE run_id = ?", runId),
-                "advancedMetrics", optionalQueryForMap("SELECT * FROM advanced_run_metric_summaries WHERE run_id = ?", runId),
-                "turnCurveMetrics", jdbcTemplate.queryForList("SELECT * FROM turn_curve_metric_summaries WHERE run_id = ? ORDER BY turn_number ASC", runId),
-                "cardMetrics", jdbcTemplate.queryForList("SELECT * FROM card_metric_summaries WHERE run_id = ? ORDER BY played_win_rate DESC, card_version_code ASC", runId),
-                "cardGravityMetrics", jdbcTemplate.queryForList("SELECT * FROM card_gravity_metric_summaries WHERE run_id = ? ORDER BY card_gravity_score DESC, card_version_code ASC", runId),
-                "effectMetrics", jdbcTemplate.queryForList("SELECT * FROM effect_metric_summaries WHERE run_id = ? ORDER BY effect_resolve_count DESC, effect_code ASC", runId)
-        );
+        Map<String, Object> detail = new HashMap<>();
+        detail.put("run", run);
+        detail.put("metrics", optionalQueryForMap("SELECT * FROM run_metric_summaries WHERE run_id = ?", runId));
+        detail.put("advancedMetrics", optionalQueryForMap("SELECT * FROM advanced_run_metric_summaries WHERE run_id = ?", runId));
+        detail.put("turnCurveMetrics", jdbcTemplate.queryForList("SELECT * FROM turn_curve_metric_summaries WHERE run_id = ? ORDER BY turn_number ASC", runId));
+        detail.put("cardMetrics", jdbcTemplate.queryForList("SELECT * FROM card_metric_summaries WHERE run_id = ? ORDER BY played_win_rate DESC, card_version_code ASC", runId));
+        detail.put("cardGravityMetrics", jdbcTemplate.queryForList("SELECT * FROM card_gravity_metric_summaries WHERE run_id = ? ORDER BY card_gravity_score DESC, card_version_code ASC", runId));
+        detail.put("effectMetrics", jdbcTemplate.queryForList("SELECT * FROM effect_metric_summaries WHERE run_id = ? ORDER BY effect_resolve_count DESC, effect_code ASC", runId));
+        detail.put("card_pair_metrics", optionalMetricRows("card_pair_metrics", """
+                SELECT * FROM card_pair_metrics
+                WHERE run_id = ?
+                ORDER BY co_occurrence_rate DESC NULLS LAST, games_with_both_drawn DESC NULLS LAST, card_a_code ASC, card_b_code ASC
+                """, runId));
+        detail.put("card_sequence_metrics", optionalMetricRows("card_sequence_metrics", """
+                SELECT * FROM card_sequence_metrics
+                WHERE run_id = ?
+                ORDER BY sequence_count DESC NULLS LAST, source_card_code ASC, followup_card_code ASC
+                """, runId));
+        detail.put("card_counter_metrics", optionalMetricRows("card_counter_metrics", """
+                SELECT * FROM card_counter_metrics
+                WHERE run_id = ?
+                ORDER BY counter_count DESC NULLS LAST, counter_card_code ASC, countered_card_code ASC
+                """, runId));
+        detail.put("reaction_interaction_metrics", optionalMetricRows("reaction_interaction_metrics", """
+                SELECT * FROM reaction_interaction_metrics
+                WHERE run_id = ?
+                ORDER BY reaction_count DESC NULLS LAST, reaction_card_code ASC, pending_effect_card_code ASC
+                """, runId));
+        detail.put("on_discard_chain_metrics", optionalMetricRows("on_discard_chain_metrics", """
+                SELECT * FROM on_discard_chain_metrics
+                WHERE run_id = ?
+                ORDER BY chain_count DESC NULLS LAST, discard_source_card_code ASC, discarded_card_code ASC, triggered_card_code ASC
+                """, runId));
+        detail.put("power_pressure_interaction_metrics", optionalMetricRows("power_pressure_interaction_metrics", """
+                SELECT * FROM power_pressure_interaction_metrics
+                WHERE run_id = ?
+                ORDER BY was_high_power_card DESC NULLS LAST, removed_count DESC NULLS LAST, source_card_code ASC, removed_card_code ASC
+                """, runId));
+        detail.put("card_interaction_summary_metrics", optionalMetricRows("card_interaction_summary_metrics", """
+                SELECT * FROM card_interaction_summary_metrics
+                WHERE run_id = ?
+                ORDER BY interaction_centrality_score DESC NULLS LAST, interaction_degree DESC NULLS LAST, card_code ASC
+                """, runId));
+        return detail;
     }
 
     /**
@@ -574,6 +610,22 @@ public class PowerBulletinCmsQueryService {
     private Map<String, Object> optionalQueryForMap(String sql, UUID id) {
         List<Map<String, Object>> rows = jdbcTemplate.queryForList(sql, id);
         return rows.isEmpty() ? Map.of() : rows.getFirst();
+    }
+
+    private List<Map<String, Object>> optionalMetricRows(String tableName, String sql, UUID id) {
+        if (!tableExists(tableName)) {
+            return List.of();
+        }
+        return jdbcTemplate.queryForList(sql, id);
+    }
+
+    private boolean tableExists(String tableName) {
+        Integer count = jdbcTemplate.queryForObject("""
+                SELECT COUNT(*)
+                FROM information_schema.tables
+                WHERE LOWER(table_name) = ?
+                """, Integer.class, tableName.toLowerCase(Locale.ROOT));
+        return count != null && count > 0;
     }
 
     private void addSearch(StringBuilder where, List<Object> params, String search, String... columns) {
