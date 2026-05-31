@@ -83,6 +83,17 @@ The migration keeps legacy `card_print_sets.powers` as a compatibility column an
 - `GET /exports/deck-versions/{deckVersionId}`
 - `GET /exports/deck-versions/code/{code}`
 - `GET /exports/base-game`
+- `GET /cms/simulation-runs/{runId}` includes optional card interaction metric arrays when
+  the simulator has written them: `cardPairMetrics`, `cardSequenceMetrics`,
+  `cardCounterMetrics`, `reactionInteractionMetrics`, `onDiscardChainMetrics`,
+  `powerPressureInteractionMetrics`, and `cardInteractionSummaryMetrics`.
+- `GET /cms/simulation-run-groups`
+- `GET /cms/simulation-run-groups/{groupId}`
+- `GET /cms/simulation-run-groups/{groupId}/summary`
+- `GET /cms/simulation-run-groups/{groupId}/subruns`
+
+Grouped runs are parent runs containing standard 2P, 3P, and 4P subruns. They are designed to make
+cross-player-count comparison easier while keeping individual subrun result endpoints unchanged.
 
 ## Seed Data
 

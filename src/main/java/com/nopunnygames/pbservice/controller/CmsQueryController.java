@@ -253,6 +253,52 @@ public class CmsQueryController {
         return ResponseEntity.ok(new ApiResponse<>(200, queryService.simulationRunDetail(runId)));
     }
 
+    /**
+     * Lists grouped simulation runs.
+     *
+     * @return grouped run rows
+     */
+    @GetMapping("/simulation-run-groups")
+    public ResponseEntity<ApiResponse<PagedResponse<Map<String, Object>>>> simulationRunGroups(
+            @RequestParam(defaultValue = "1") int page,
+            @RequestParam(defaultValue = "10") int limit
+    ) {
+        return ResponseEntity.ok(new ApiResponse<>(200, paged(queryService.listSimulationRunGroups(), page, limit)));
+    }
+
+    /**
+     * Reads one grouped simulation run.
+     *
+     * @param groupId grouped run UUID
+     * @return grouped run detail
+     */
+    @GetMapping("/simulation-run-groups/{groupId}")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> simulationRunGroup(@PathVariable UUID groupId) {
+        return ResponseEntity.ok(new ApiResponse<>(200, queryService.simulationRunGroupDetail(groupId)));
+    }
+
+    /**
+     * Reads grouped run summary JSON.
+     *
+     * @param groupId grouped run UUID
+     * @return grouped summary
+     */
+    @GetMapping("/simulation-run-groups/{groupId}/summary")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> simulationRunGroupSummary(@PathVariable UUID groupId) {
+        return ResponseEntity.ok(new ApiResponse<>(200, queryService.simulationRunGroupSummary(groupId)));
+    }
+
+    /**
+     * Lists grouped run subruns.
+     *
+     * @param groupId grouped run UUID
+     * @return subrun rows
+     */
+    @GetMapping("/simulation-run-groups/{groupId}/subruns")
+    public ResponseEntity<ApiResponse<List<Map<String, Object>>>> simulationRunGroupSubruns(@PathVariable UUID groupId) {
+        return ResponseEntity.ok(new ApiResponse<>(200, queryService.simulationRunGroupSubruns(groupId)));
+    }
+
     private PagedResponse<Map<String, Object>> paged(List<Map<String, Object>> rows, int page, int limit) {
         return paged(rows, page, limit, true);
     }

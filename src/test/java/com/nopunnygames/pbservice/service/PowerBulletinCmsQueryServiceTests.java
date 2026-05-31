@@ -1,0 +1,315 @@
+package com.nopunnygames.pbservice.service;
+
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.datasource.DriverManagerDataSource;
+
+import java.sql.Timestamp;
+import java.time.Instant;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
+
+import static org.assertj.core.api.Assertions.assertThat;
+
+/**
+ * Focused tests for Power Bulletin simulation result read models.
+ */
+class PowerBulletinCmsQueryServiceTests {
+    private JdbcTemplate jdbcTemplate;
+    private PowerBulletinCmsQueryService queryService;
+    private UUID runId;
+
+    @BeforeEach
+    void setUp() {
+        DriverManagerDataSource dataSource = new DriverManagerDataSource();
+        dataSource.setDriverClassName("org.h2.Driver");
+        dataSource.setUrl("jdbc:h2:mem:" + UUID.randomUUID() + ";MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;DEFAULT_NULL_ORDERING=HIGH;DB_CLOSE_DELAY=-1");
+        jdbcTemplate = new JdbcTemplate(dataSource);
+        queryService = new PowerBulletinCmsQueryService(jdbcTemplate);
+        runId = UUID.randomUUID();
+        createBaseResultTables();
+        insertBaseRun();
+    }
+
+    @Test
+    void simulationRunDetailWorksWithoutInteractionMetricTables() {
+        Map<String, Object> detail = queryService.simulationRunDetail(runId);
+
+        assertThat(detail.get("run")).isInstanceOf(Map.class);
+        assertThat(detail.get("runGroup")).isEqualTo(Map.of());
+        assertThat(detail.get("cardPairMetrics")).isEqualTo(List.of());
+        assertThat(detail.get("reactionInteractionMetrics")).isEqualTo(List.of());
+        assertThat(detail.get("cardCounterMetrics")).isEqualTo(List.of());
+        assertThat(detail.get("onDiscardChainMetrics")).isEqualTo(List.of());
+        assertThat(detail.get("powerPressureInteractionMetrics")).isEqualTo(List.of());
+        assertThat(detail.get("cardInteractionSummaryMetrics")).isEqualTo(List.of());
+        assertThat(detail.get("cardSequenceMetrics")).isEqualTo(List.of());
+    }
+
+    @Test
+    void simulationRunDetailIncludesInteractionMetricsWhenPresent() {
+        createInteractionTables();
+        jdbcTemplate.update("""
+                INSERT INTO reaction_interaction_metrics (
+                    run_id, reaction_card_code, pending_effect_card_code, reaction_count,
+                    reaction_success_count, reaction_success_rate, targeted_reaction,
+                    reacting_player_was_target, average_turn_reacted
+                ) VALUES (?, 'VILLAIN_TACTICIAN_V1', 'UNKNOWN_FUTURE_CARD_V1', 3, 3, 1.25, false, false, 4.5)
+                """, runId);
+        jdbcTemplate.update("""
+                INSERT INTO card_counter_metrics (
+                    run_id, counter_card_code, countered_card_code, counter_type, counter_count,
+                    counter_success_count, counter_success_rate, prevented_discards_estimate,
+                    prevented_draws_estimate, prevented_net_card_advantage_estimate
+                ) VALUES (?, 'VILLAIN_TACTICIAN_V1', 'HERO_ATTACKER_V1', 'NEGATE_EFFECT', 2, 2, 1.0, null, null, null)
+                """, runId);
+        jdbcTemplate.update("""
+                INSERT INTO card_interaction_summary_metrics (
+                    run_id, card_code, interaction_degree, synergy_degree, counter_degree,
+                    trigger_degree, reaction_degree, average_interaction_strength,
+                    interaction_centrality_score
+                ) VALUES (?, 'HERO_GUARD_V1', 5, 0, 3, 0, 2, 1.4, 9.5)
+                """, runId);
+
+        Map<String, Object> detail = queryService.simulationRunDetail(runId);
+
+        List<Map<String, Object>> reactions = rows(detail, "reactionInteractionMetrics");
+        assertThat(reactions).hasSize(1);
+        assertThat(reactions.getFirst().get("pending_effect_card_code")).isEqualTo("UNKNOWN_FUTURE_CARD_V1");
+        assertThat(reactions.getFirst().get("reaction_success_rate")).isEqualTo(1.25);
+
+        List<Map<String, Object>> counters = rows(detail, "cardCounterMetrics");
+        assertThat(counters).hasSize(1);
+        assertThat(counters.getFirst().get("prevented_discards_estimate")).isNull();
+
+        List<Map<String, Object>> summary = rows(detail, "cardInteractionSummaryMetrics");
+        assertThat(summary).hasSize(1);
+        assertThat(summary.getFirst().get("card_code")).isEqualTo("HERO_GUARD_V1");
+    }
+
+    @Test
+    void groupedRunListAndDetailReturnMetadataSubrunsAndSummary() {
+        UUID groupId = UUID.randomUUID();
+        createGroupedRunTables();
+        jdbcTemplate.update("""
+                INSERT INTO simulation_run_groups (
+                    id, run_group_code, run_group_name, deck_code, deck_name, version_name,
+                    rng_seed, requested_iterations_per_player_count, player_counts, created_at, notes
+                ) VALUES (?, 'GROUP_A', 'Aurora-Miho-Caffe', 'TEST_DECK_V1', 'Test Deck', 'v1', 1234, 10, '[2,3,4]', ?, null)
+                """, groupId, Timestamp.from(Instant.parse("2026-05-31T00:00:00Z")));
+        jdbcTemplate.update("""
+                INSERT INTO simulation_run_group_members (
+                    id, run_group_id, run_id, run_code, player_count, total_games, rng_seed, status, created_at
+                ) VALUES (?, ?, ?, 'RUN_A', 4, 10, 42, 'COMPLETED', ?)
+                """, UUID.randomUUID(), groupId, runId, Timestamp.from(Instant.parse("2026-05-31T00:00:00Z")));
+        jdbcTemplate.update("""
+                INSERT INTO simulation_run_group_summaries (id, run_group_id, summary_json, created_at)
+                VALUES (?, ?, '{"cross_player_summary":{"deck_out_rate_range":0.2}}', ?)
+                """, UUID.randomUUID(), groupId, Timestamp.from(Instant.parse("2026-05-31T00:00:00Z")));
+
+        assertThat(queryService.listSimulationRunGroups()).hasSize(1);
+        Map<String, Object> detail = queryService.simulationRunGroupDetail(groupId);
+        assertThat(map(detail, "group")).containsEntry("run_group_code", "GROUP_A");
+        assertThat((List<?>) detail.get("subruns")).hasSize(1);
+        assertThat(map(detail, "summary")).containsKey("summary_json");
+        assertThat(queryService.simulationRunDetail(runId).get("runGroup")).isInstanceOf(Map.class);
+    }
+
+    @Test
+    void groupedRunDetailDoesNotCrashWhenSummaryIsMissing() {
+        UUID groupId = UUID.randomUUID();
+        createGroupedRunTables();
+        jdbcTemplate.update("""
+                INSERT INTO simulation_run_groups (
+                    id, run_group_code, run_group_name, deck_code, requested_iterations_per_player_count,
+                    player_counts, created_at
+                ) VALUES (?, 'GROUP_EMPTY', 'Aurora-Miho', 'TEST_DECK_V1', 10, '[2,3,4]', ?)
+                """, groupId, Timestamp.from(Instant.parse("2026-05-31T00:00:00Z")));
+
+        Map<String, Object> detail = queryService.simulationRunGroupDetail(groupId);
+
+        assertThat(map(detail, "group")).containsEntry("run_group_code", "GROUP_EMPTY");
+        assertThat(detail.get("subruns")).isEqualTo(List.of());
+        assertThat(detail.get("summary")).isEqualTo(Map.of());
+    }
+
+    @SuppressWarnings("unchecked")
+    private List<Map<String, Object>> rows(Map<String, Object> detail, String key) {
+        return (List<Map<String, Object>>) detail.get(key);
+    }
+
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> map(Map<String, Object> detail, String key) {
+        return (Map<String, Object>) detail.get(key);
+    }
+
+    private void createBaseResultTables() {
+        jdbcTemplate.execute("""
+                CREATE TABLE deck_identities (
+                    id UUID PRIMARY KEY,
+                    name TEXT NOT NULL
+                )
+                """);
+        jdbcTemplate.execute("""
+                CREATE TABLE deck_versions (
+                    id UUID PRIMARY KEY,
+                    deck_identity_id UUID NOT NULL,
+                    code TEXT NOT NULL,
+                    version_name TEXT NOT NULL
+                )
+                """);
+        jdbcTemplate.execute("""
+                CREATE TABLE simulation_runs (
+                    id UUID PRIMARY KEY,
+                    run_code TEXT NOT NULL,
+                    deck_version_id UUID NOT NULL,
+                    total_games INTEGER NOT NULL,
+                    player_count INTEGER NOT NULL,
+                    rng_seed BIGINT NOT NULL,
+                    created_at TIMESTAMP NOT NULL,
+                    notes TEXT
+                )
+                """);
+        jdbcTemplate.execute("""
+                CREATE TABLE run_metric_summaries (
+                    run_id UUID PRIMARY KEY,
+                    deck_out_rate DOUBLE PRECISION,
+                    last_man_standing_rate DOUBLE PRECISION,
+                    elimination_rate DOUBLE PRECISION,
+                    average_turns DOUBLE PRECISION,
+                    median_turns DOUBLE PRECISION,
+                    average_final_hand_size DOUBLE PRECISION,
+                    average_final_hand_power DOUBLE PRECISION,
+                    average_cards_drawn_per_game DOUBLE PRECISION,
+                    average_cards_discarded_per_game DOUBLE PRECISION,
+                    average_reactions_per_game DOUBLE PRECISION
+                )
+                """);
+        jdbcTemplate.execute("""
+                CREATE TABLE advanced_run_metric_summaries (
+                    run_id UUID PRIMARY KEY,
+                    low_hand_pressure_rate DOUBLE PRECISION,
+                    average_peak_tension_turn DOUBLE PRECISION,
+                    memorability_score DOUBLE PRECISION,
+                    pressure_fairness_score DOUBLE PRECISION
+                )
+                """);
+        jdbcTemplate.execute("CREATE TABLE turn_curve_metric_summaries (run_id UUID, turn_number INTEGER)");
+        jdbcTemplate.execute("CREATE TABLE card_metric_summaries (run_id UUID, card_version_code TEXT, played_win_rate DOUBLE PRECISION)");
+        jdbcTemplate.execute("CREATE TABLE card_gravity_metric_summaries (run_id UUID, card_version_code TEXT, card_gravity_score DOUBLE PRECISION)");
+        jdbcTemplate.execute("CREATE TABLE effect_metric_summaries (run_id UUID, effect_code TEXT, effect_resolve_count INTEGER)");
+    }
+
+    private void insertBaseRun() {
+        UUID deckIdentityId = UUID.randomUUID();
+        UUID deckVersionId = UUID.randomUUID();
+        jdbcTemplate.update("INSERT INTO deck_identities (id, name) VALUES (?, 'Test Deck')", deckIdentityId);
+        jdbcTemplate.update("""
+                INSERT INTO deck_versions (id, deck_identity_id, code, version_name)
+                VALUES (?, ?, 'TEST_DECK_V1', 'v1')
+                """, deckVersionId, deckIdentityId);
+        jdbcTemplate.update("""
+                INSERT INTO simulation_runs (
+                    id, run_code, deck_version_id, total_games, player_count, rng_seed, created_at, notes
+                ) VALUES (?, 'RUN_A', ?, 10, 4, 42, ?, null)
+                """, runId, deckVersionId, Timestamp.from(Instant.parse("2026-05-31T00:00:00Z")));
+        jdbcTemplate.update("""
+                INSERT INTO run_metric_summaries (
+                    run_id, deck_out_rate, last_man_standing_rate, elimination_rate,
+                    average_turns, median_turns, average_final_hand_size,
+                    average_final_hand_power, average_cards_drawn_per_game,
+                    average_cards_discarded_per_game, average_reactions_per_game
+                ) VALUES (?, 0.5, 0.5, 0.1, 10.0, 10.0, 2.0, 8.0, 5.0, 4.0, 1.0)
+                """, runId);
+        jdbcTemplate.update("""
+                INSERT INTO advanced_run_metric_summaries (
+                    run_id, low_hand_pressure_rate, average_peak_tension_turn,
+                    memorability_score, pressure_fairness_score
+                ) VALUES (?, 0.2, 6.0, 1.5, 0.8)
+                """, runId);
+    }
+
+    private void createInteractionTables() {
+        jdbcTemplate.execute("""
+                CREATE TABLE reaction_interaction_metrics (
+                    run_id UUID,
+                    reaction_card_code TEXT,
+                    pending_effect_card_code TEXT,
+                    reaction_count INTEGER,
+                    reaction_success_count INTEGER,
+                    reaction_success_rate DOUBLE PRECISION,
+                    targeted_reaction BOOLEAN,
+                    reacting_player_was_target BOOLEAN,
+                    average_turn_reacted DOUBLE PRECISION
+                )
+                """);
+        jdbcTemplate.execute("""
+                CREATE TABLE card_counter_metrics (
+                    run_id UUID,
+                    counter_card_code TEXT,
+                    countered_card_code TEXT,
+                    counter_type TEXT,
+                    counter_count INTEGER,
+                    counter_success_count INTEGER,
+                    counter_success_rate DOUBLE PRECISION,
+                    prevented_discards_estimate DOUBLE PRECISION,
+                    prevented_draws_estimate DOUBLE PRECISION,
+                    prevented_net_card_advantage_estimate DOUBLE PRECISION
+                )
+                """);
+        jdbcTemplate.execute("""
+                CREATE TABLE card_interaction_summary_metrics (
+                    run_id UUID,
+                    card_code TEXT,
+                    interaction_degree INTEGER,
+                    synergy_degree INTEGER,
+                    counter_degree INTEGER,
+                    trigger_degree INTEGER,
+                    reaction_degree INTEGER,
+                    average_interaction_strength DOUBLE PRECISION,
+                    interaction_centrality_score DOUBLE PRECISION
+                )
+                """);
+    }
+
+    private void createGroupedRunTables() {
+        jdbcTemplate.execute("""
+                CREATE TABLE simulation_run_groups (
+                    id UUID PRIMARY KEY,
+                    run_group_code TEXT,
+                    run_group_name TEXT,
+                    deck_code TEXT,
+                    deck_name TEXT,
+                    version_name TEXT,
+                    rng_seed BIGINT,
+                    requested_iterations_per_player_count INTEGER,
+                    player_counts TEXT,
+                    created_at TIMESTAMP,
+                    notes TEXT
+                )
+                """);
+        jdbcTemplate.execute("""
+                CREATE TABLE simulation_run_group_members (
+                    id UUID PRIMARY KEY,
+                    run_group_id UUID,
+                    run_id UUID,
+                    run_code TEXT,
+                    player_count INTEGER,
+                    total_games INTEGER,
+                    rng_seed BIGINT,
+                    status TEXT,
+                    created_at TIMESTAMP
+                )
+                """);
+        jdbcTemplate.execute("""
+                CREATE TABLE simulation_run_group_summaries (
+                    id UUID PRIMARY KEY,
+                    run_group_id UUID,
+                    summary_json TEXT,
+                    created_at TIMESTAMP
+                )
+                """);
+    }
+}
