@@ -56,6 +56,21 @@ class PowerBulletinCmsQueryServiceTests {
     }
 
     @Test
+    void simulationRunDetailIncludesTurnCountDistributionWhenGameSummariesExist() {
+        jdbcTemplate.execute("CREATE TABLE game_summaries (run_id UUID, total_turns INTEGER)");
+        jdbcTemplate.update("INSERT INTO game_summaries (run_id, total_turns) VALUES (?, 5)", runId);
+        jdbcTemplate.update("INSERT INTO game_summaries (run_id, total_turns) VALUES (?, 5)", runId);
+        jdbcTemplate.update("INSERT INTO game_summaries (run_id, total_turns) VALUES (?, 6)", runId);
+
+        Map<String, Object> detail = queryService.simulationRunDetail(runId);
+
+        List<Map<String, Object>> distribution = rows(detail, "turnCountDistribution");
+        assertThat(distribution).hasSize(2);
+        assertThat(distribution.get(0)).containsEntry("total_turns", 5).containsEntry("game_count", 2L);
+        assertThat(distribution.get(1)).containsEntry("total_turns", 6).containsEntry("game_count", 1L);
+    }
+
+    @Test
     void simulationRunDetailIncludesInteractionMetricsWhenPresent() {
         createInteractionTables();
         jdbcTemplate.update("""

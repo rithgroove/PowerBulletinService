@@ -96,6 +96,7 @@ public class PowerBulletinCmsQueryService {
             "on_discard_chain_metrics",
             "power_pressure_interaction_metrics",
             "card_interaction_summary_metrics",
+            "game_summaries",
             "simulation_run_groups",
             "simulation_run_group_members",
             "simulation_run_group_summaries"
@@ -555,6 +556,7 @@ public class PowerBulletinCmsQueryService {
         detail.put("metrics", optionalQueryForMap("SELECT * FROM run_metric_summaries WHERE run_id = ?", runId));
         detail.put("advancedMetrics", optionalQueryForMap("SELECT * FROM advanced_run_metric_summaries WHERE run_id = ?", runId));
         detail.put("turnCurveMetrics", jdbcTemplate.queryForList("SELECT * FROM turn_curve_metric_summaries WHERE run_id = ? ORDER BY turn_number ASC", runId));
+        detail.put("turnCountDistribution", turnCountDistribution(runId));
         detail.put("cardMetrics", jdbcTemplate.queryForList("SELECT * FROM card_metric_summaries WHERE run_id = ? ORDER BY played_win_rate DESC, card_version_code ASC", runId));
         detail.put("cardGravityMetrics", jdbcTemplate.queryForList("SELECT * FROM card_gravity_metric_summaries WHERE run_id = ? ORDER BY card_gravity_score DESC, card_version_code ASC", runId));
         detail.put("effectMetrics", jdbcTemplate.queryForList("SELECT * FROM effect_metric_summaries WHERE run_id = ? ORDER BY effect_resolve_count DESC, effect_code ASC", runId));
@@ -753,6 +755,21 @@ public class PowerBulletinCmsQueryService {
             rows = List.of();
         }
         return rows.isEmpty() ? Map.of() : rows.getFirst();
+    }
+
+    private List<Map<String, Object>> turnCountDistribution(UUID runId) {
+        if (!tableExists("game_summaries") || !columnExists("game_summaries", "total_turns")) {
+            return List.of();
+        }
+        return jdbcTemplate.queryForList("""
+                SELECT
+                    total_turns,
+                    COUNT(*) AS game_count
+                FROM game_summaries
+                WHERE run_id = ?
+                GROUP BY total_turns
+                ORDER BY total_turns ASC
+                """, runId);
     }
 
     /**
