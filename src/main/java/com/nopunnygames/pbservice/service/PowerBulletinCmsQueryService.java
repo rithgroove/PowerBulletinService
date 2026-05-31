@@ -546,8 +546,8 @@ public class PowerBulletinCmsQueryService {
                     dv.version_name,
                     di.name AS deck_name
                 FROM simulation_runs sr
-                JOIN deck_versions dv ON dv.id = sr.deck_version_id
-                JOIN deck_identities di ON di.id = dv.deck_identity_id
+                LEFT JOIN deck_versions dv ON dv.id = sr.deck_version_id
+                LEFT JOIN deck_identities di ON di.id = dv.deck_identity_id
                 WHERE sr.id = ?
                 """, runId);
         Map<String, Object> detail = new LinkedHashMap<>();
@@ -720,20 +720,38 @@ public class PowerBulletinCmsQueryService {
     }
 
     private Map<String, Object> simulationRunGroupForRun(UUID runId) {
-        if (!tableExists("simulation_run_group_members")) {
+        if (!tableExists("simulation_run_groups")) {
             return Map.of();
         }
-        List<Map<String, Object>> rows = jdbcTemplate.queryForList("""
-                SELECT
-                    srg.id AS run_group_id,
-                    srg.run_group_code,
-                    srg.run_group_name
-                FROM simulation_run_group_members srgm
-                JOIN simulation_run_groups srg ON srg.id = srgm.run_group_id
-                WHERE srgm.run_id = ?
-                ORDER BY srg.created_at DESC
-                LIMIT 1
-                """, runId);
+        List<Map<String, Object>> rows;
+        if (columnExists("simulation_runs", "run_group_id")) {
+            rows = jdbcTemplate.queryForList("""
+                    SELECT
+                        srg.id AS run_group_id,
+                        srg.run_group_code,
+                        srg.run_group_name
+                    FROM simulation_runs sr
+                    LEFT JOIN simulation_run_group_members srgm ON srgm.run_id = sr.id
+                    JOIN simulation_run_groups srg ON srg.id = COALESCE(sr.run_group_id, srgm.run_group_id)
+                    WHERE sr.id = ?
+                    ORDER BY srg.created_at DESC
+                    LIMIT 1
+                    """, runId);
+        } else if (tableExists("simulation_run_group_members")) {
+            rows = jdbcTemplate.queryForList("""
+                    SELECT
+                        srg.id AS run_group_id,
+                        srg.run_group_code,
+                        srg.run_group_name
+                    FROM simulation_run_group_members srgm
+                    JOIN simulation_run_groups srg ON srg.id = srgm.run_group_id
+                    WHERE srgm.run_id = ?
+                    ORDER BY srg.created_at DESC
+                    LIMIT 1
+                    """, runId);
+        } else {
+            rows = List.of();
+        }
         return rows.isEmpty() ? Map.of() : rows.getFirst();
     }
 
@@ -751,6 +769,20 @@ public class PowerBulletinCmsQueryService {
         }
         String sql = "SELECT * FROM " + tableName + " WHERE run_id = ? ORDER BY " + orderClause;
         return jdbcTemplate.queryForList(sql, runId);
+    }
+
+    private boolean columnExists(String tableName, String columnName) {
+        if (jdbcTemplate.getDataSource() == null) {
+            return false;
+        }
+        try (Connection connection = jdbcTemplate.getDataSource().getConnection()) {
+            DatabaseMetaData metaData = connection.getMetaData();
+            try (ResultSet resultSet = metaData.getColumns(null, null, tableName, columnName)) {
+                return resultSet.next();
+            }
+        } catch (SQLException ignored) {
+            return false;
+        }
     }
 
     private boolean tableExists(String tableName) {
