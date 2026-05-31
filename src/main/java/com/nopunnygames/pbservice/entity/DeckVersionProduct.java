@@ -63,6 +63,10 @@ public class DeckVersionProduct extends MasterEntity<DeckVersionProduct, DeckVer
         }
         if (product != null) {
             dto.setProductId(product.getId());
+            dto.setProductCode(product.getCode());
+            dto.setProductName(product.getName());
+            dto.setProductType(product.getProductType() == null ? null : product.getProductType().name());
+            dto.setReleaseStatus(product.getReleaseStatus() == null ? null : product.getReleaseStatus().name());
         }
         return dto;
     }

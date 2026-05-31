@@ -5,6 +5,7 @@ import com.nopunnygames.tanuki.core.repository.MasterRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -31,4 +32,21 @@ public interface DeckVersionProductRepository extends MasterRepository<DeckVersi
             @Param("deckVersionId") UUID deckVersionId,
             @Param("productId") UUID productId
     );
+
+    /**
+     * Lists active product links for one deck version.
+     *
+     * @param deckVersionId deck version UUID
+     * @return active product links
+     */
+    @Query("""
+            SELECT item
+            FROM DeckVersionProduct item
+            JOIN FETCH item.product product
+            WHERE item.deckVersion.id = :deckVersionId
+              AND item.deletedAt IS NULL
+              AND LOWER(item.status) = 'active'
+            ORDER BY product.displayOrder ASC, LOWER(product.name) ASC, LOWER(product.code) ASC
+            """)
+    List<DeckVersionProduct> findActiveByDeckVersionId(@Param("deckVersionId") UUID deckVersionId);
 }

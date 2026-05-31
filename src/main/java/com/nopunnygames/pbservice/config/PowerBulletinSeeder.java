@@ -135,6 +135,12 @@ public class PowerBulletinSeeder implements CommandLineRunner {
         for (String printSetCode : List.of("CIVILIAN_REPORTER_V1_STANDARD", "CIVILIAN_SPY_V1_STANDARD", "HERO_GUARD_V1_STANDARD", "HERO_ATTACKER_V1_STANDARD", "HERO_HITMAN_V1_STANDARD", "HERO_SEER_V1_STANDARD", "HERO_HEALER_V1_STANDARD", "VILLAIN_GAMBLER_V1_STANDARD", "VILLAIN_ATTACKER_V1_STANDARD", "VILLAIN_PROVOCATEUR_V1_STANDARD", "VILLAIN_TACTICIAN_V1_STANDARD", "VILLAIN_VENGEANCE_V1_STANDARD")) {
             upsertDeckEntry(expandedVersion, printSetCode);
         }
+
+        DeckIdentity necromancerUnderdog = upsertDeckIdentity("a7bbd2d0-c81f-56f0-b232-583e1437bc92", "NECROMANCER_UNDERDOG", "Necromancer Underdog Experimental Deck");
+        DeckVersion necromancerUnderdogVersion = upsertDeckVersion("1d632c0a-0206-5a29-9b76-e66163f5e72a", "NECROMANCER_UNDERDOG_V1", necromancerUnderdog, "necromancer_underdog_v1", "Power Bulletin plus Head Office with Necromancer and Underdog.");
+        for (String printSetCode : List.of("HERO_ATTACKER_V1_STANDARD", "HERO_HITMAN_V1_STANDARD", "HERO_HEALER_V1_STANDARD", "HERO_SEER_V1_STANDARD", "HERO_GUARD_V1_STANDARD", "VILLAIN_ATTACKER_V1_STANDARD", "VILLAIN_PROVOCATEUR_V1_STANDARD", "VILLAIN_GAMBLER_V1_STANDARD", "VILLAIN_VENGEANCE_V1_STANDARD", "VILLAIN_TACTICIAN_V1_STANDARD", "CIVILIAN_REPORTER_V1_STANDARD", "CIVILIAN_SPY_V1_STANDARD", "VILLAIN_NECROMANCER_V1_STANDARD", "HERO_UNDERDOG_V1_STANDARD")) {
+            upsertDeckEntry(necromancerUnderdogVersion, printSetCode);
+        }
     }
 
     private void seedProducts() {

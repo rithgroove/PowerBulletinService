@@ -13,6 +13,10 @@ public class DeckVersionProductDto {
     private UUID id;
     private UUID deckVersionId;
     private UUID productId;
+    private String productCode;
+    private String productName;
+    private String productType;
+    private String releaseStatus;
     private int quantityMultiplier = 1;
     private LocalDateTime appliedAt;
     private String status = "Active";

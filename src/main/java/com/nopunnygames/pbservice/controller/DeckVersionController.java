@@ -1,25 +1,26 @@
 package com.nopunnygames.pbservice.controller;
 
 import com.nopunnygames.pbservice.dto.DeckVersionDto;
+import com.nopunnygames.pbservice.dto.DeckVersionProductDto;
 import com.nopunnygames.pbservice.dto.ProductDeckApplicationDto;
 import com.nopunnygames.pbservice.entity.DeckVersion;
 import com.nopunnygames.pbservice.repository.DeckVersionRepository;
 import com.nopunnygames.pbservice.service.DeckVersionService;
 import com.nopunnygames.pbservice.service.ProductService;
-import com.nopunnygames.tanuki.core.dto.AuthUser;
 import com.nopunnygames.tanuki.core.controller.MasterController;
+import com.nopunnygames.tanuki.core.dto.AuthUser;
 import com.nopunnygames.tanuki.core.exception.ObjectNotFoundException;
 import com.nopunnygames.tanuki.core.exception.ValidationErrorException;
 import com.nopunnygames.tanuki.core.response.ApiErrorResponse;
 import com.nopunnygames.tanuki.core.response.ApiResponse;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
-import org.springframework.security.core.Authentication;
 
 import java.util.List;
 import java.util.UUID;
@@ -74,6 +75,68 @@ public class DeckVersionController extends MasterController<DeckVersion, UUID, D
     @GetMapping("/by-deck/{deckIdentityId}")
     public ResponseEntity<ApiResponse<List<DeckVersionDto>>> listByDeck(@PathVariable UUID deckIdentityId) {
         return ResponseEntity.ok(new ApiResponse<>(200, service.listByDeckIdentity(deckIdentityId)));
+    }
+
+    /**
+     * Lists products linked to this deck version.
+     *
+     * @param deckVersionId deck version UUID
+     * @return linked product rows
+     */
+    @GetMapping("/{deckVersionId}/products")
+    public ResponseEntity<ApiResponse<List<DeckVersionProductDto>>> linkedProducts(@PathVariable UUID deckVersionId) {
+        return ResponseEntity.ok(new ApiResponse<>(200, productService.listLinkedProducts(deckVersionId)));
+    }
+
+    /**
+     * Links a product to this deck version without changing deck entries.
+     *
+     * @param deckVersionId deck version UUID
+     * @param productId product UUID
+     * @param authentication Spring Security authentication
+     * @return linked product row
+     */
+    @PostMapping("/{deckVersionId}/products/{productId}/link")
+    public ResponseEntity<ApiResponse<DeckVersionProductDto>> linkProduct(
+            @PathVariable UUID deckVersionId,
+            @PathVariable UUID productId,
+            Authentication authentication
+    ) {
+        AuthUser user = getAuthenticatedUser(authentication);
+        ResponseEntity<ApiResponse<DeckVersionProductDto>> permissionCheck = checkPermission(user, permissionCode("UPDATE"));
+        if (permissionCheck != null) {
+            return permissionCheck;
+        }
+
+        try {
+            return ResponseEntity.ok(new ApiResponse<>(200, productService.linkProductToDeckVersion(deckVersionId, productId, user)));
+        } catch (ValidationErrorException exception) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(new ApiErrorResponse<>(400, null, exception.getMessage(), exception.errors));
+        }
+    }
+
+    /**
+     * Removes a product link from this deck version without changing deck entries.
+     *
+     * @param deckVersionId deck version UUID
+     * @param productId product UUID
+     * @param authentication Spring Security authentication
+     * @return removed product row
+     */
+    @PostMapping("/{deckVersionId}/products/{productId}/unlink")
+    public ResponseEntity<ApiResponse<DeckVersionProductDto>> unlinkProduct(
+            @PathVariable UUID deckVersionId,
+            @PathVariable UUID productId,
+            Authentication authentication
+    ) {
+        AuthUser user = getAuthenticatedUser(authentication);
+        ResponseEntity<ApiResponse<DeckVersionProductDto>> permissionCheck = checkPermission(user, permissionCode("UPDATE"));
+        if (permissionCheck != null) {
+            return permissionCheck;
+        }
+
+        return ResponseEntity.ok(new ApiResponse<>(200, productService.unlinkProductFromDeckVersion(deckVersionId, productId, user)));
     }
 
     /**

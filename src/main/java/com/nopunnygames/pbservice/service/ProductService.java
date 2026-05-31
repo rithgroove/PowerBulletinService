@@ -1,5 +1,6 @@
 package com.nopunnygames.pbservice.service;
 
+import com.nopunnygames.pbservice.dto.DeckVersionProductDto;
 import com.nopunnygames.pbservice.dto.ProductDeckApplicationDto;
 import com.nopunnygames.pbservice.dto.ProductDto;
 import com.nopunnygames.pbservice.dto.ProductItemDto;
@@ -22,12 +23,12 @@ import com.nopunnygames.tanuki.core.exception.ValidationError;
 import com.nopunnygames.tanuki.core.exception.ValidationErrorException;
 import com.nopunnygames.tanuki.core.response.PageMeta;
 import com.nopunnygames.tanuki.core.response.PagedResponse;
+import com.nopunnygames.tanuki.core.service.MasterService;
 import com.nopunnygames.tanuki.core.util.SpecificationBuilder;
 import jakarta.persistence.criteria.Predicate;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
-import com.nopunnygames.tanuki.core.service.MasterService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -174,9 +175,7 @@ public class ProductService extends MasterService<Product, UUID, ProductDto> {
      */
     @Transactional
     public ProductDeckApplicationDto addProductToDeckVersion(UUID deckVersionId, UUID productId, AuthUser user) {
-        DeckVersion deckVersion = deckVersionRepository.findById(deckVersionId)
-                .filter(version -> version.getDeletedAt() == null)
-                .orElseThrow(() -> new ObjectNotFoundException("Deck version " + deckVersionId + " not found"));
+        DeckVersion deckVersion = findDeckVersion(deckVersionId);
         Product product = findProduct(productId);
         validateProductCanBeApplied(product);
 
@@ -197,27 +196,14 @@ public class ProductService extends MasterService<Product, UUID, ProductDto> {
                 entry.setQuantity(1);
                 created++;
                 totalQuantity++;
-            } else {
-                if (entry.getQuantity() != 1) {
-                    entry.setQuantity(1);
-                    updated++;
-                }
+            } else if (entry.getQuantity() != 1) {
+                entry.setQuantity(1);
+                updated++;
             }
             deckEntryRepository.save(entry);
         }
 
-        DeckVersionProduct provenance = deckVersionProductRepository.findActiveByDeckVersionIdAndProductId(deckVersionId, productId)
-                .orElseGet(DeckVersionProduct::new);
-        if (provenance.getId() == null) {
-            provenance.setDeckVersion(deckVersion);
-            provenance.setProduct(product);
-            provenance.setQuantityMultiplier(1);
-            provenance.setStatus("Active");
-        } else {
-            provenance.setQuantityMultiplier(provenance.getQuantityMultiplier() + 1);
-        }
-        provenance.setAppliedAt(LocalDateTime.now());
-        deckVersionProductRepository.save(provenance);
+        saveDeckProductLink(deckVersion, product, true);
 
         ProductDeckApplicationDto result = new ProductDeckApplicationDto();
         result.setDeckVersionId(deckVersionId);
@@ -229,6 +215,58 @@ public class ProductService extends MasterService<Product, UUID, ProductDto> {
         result.setEntriesUpdated(updated);
         result.setTotalQuantityAdded(totalQuantity);
         return result;
+    }
+
+    /**
+     * Links a product to a deck version without changing deck entries.
+     *
+     * @param deckVersionId deck version UUID
+     * @param productId product UUID
+     * @param user authenticated user
+     * @return linked product row
+     */
+    @Transactional
+    public DeckVersionProductDto linkProductToDeckVersion(UUID deckVersionId, UUID productId, AuthUser user) {
+        DeckVersion deckVersion = findDeckVersion(deckVersionId);
+        Product product = findProduct(productId);
+        validateProductCanBeLinked(product);
+        return saveDeckProductLink(deckVersion, product, false).toDto();
+    }
+
+    /**
+     * Lists products linked to one deck version.
+     *
+     * @param deckVersionId deck version UUID
+     * @return active product links
+     */
+    @Transactional(readOnly = true)
+    public List<DeckVersionProductDto> listLinkedProducts(UUID deckVersionId) {
+        findDeckVersion(deckVersionId);
+        return deckVersionProductRepository.findActiveByDeckVersionId(deckVersionId)
+                .stream()
+                .map(DeckVersionProduct::toDto)
+                .toList();
+    }
+
+    /**
+     * Removes an active product link from a deck version.
+     *
+     * @param deckVersionId deck version UUID
+     * @param productId product UUID
+     * @param user authenticated user
+     * @return removed product link
+     */
+    @Transactional
+    public DeckVersionProductDto unlinkProductFromDeckVersion(UUID deckVersionId, UUID productId, AuthUser user) {
+        DeckVersionProduct link = deckVersionProductRepository.findActiveByDeckVersionIdAndProductId(deckVersionId, productId)
+                .orElseThrow(() -> new ObjectNotFoundException("Product link not found"));
+        link.setStatus("Inactive");
+        link.setDeletedAt(LocalDateTime.now());
+        if (user != null) {
+            link.setDeletedByID(user.userId() == null ? null : UUID.fromString(user.userId()));
+            link.setDeletedByName(user.userName());
+        }
+        return deckVersionProductRepository.save(link).toDto();
     }
 
     /**
@@ -305,6 +343,33 @@ public class ProductService extends MasterService<Product, UUID, ProductDto> {
         return repository.findById(productId)
                 .filter(product -> product.getDeletedAt() == null)
                 .orElseThrow(() -> new ObjectNotFoundException("Product " + productId + " not found"));
+    }
+
+    private DeckVersion findDeckVersion(UUID deckVersionId) {
+        return deckVersionRepository.findById(deckVersionId)
+                .filter(version -> version.getDeletedAt() == null)
+                .orElseThrow(() -> new ObjectNotFoundException("Deck version " + deckVersionId + " not found"));
+    }
+
+    private DeckVersionProduct saveDeckProductLink(DeckVersion deckVersion, Product product, boolean incrementMultiplier) {
+        DeckVersionProduct link = deckVersionProductRepository.findActiveByDeckVersionIdAndProductId(deckVersion.getId(), product.getId())
+                .orElseGet(DeckVersionProduct::new);
+        if (link.getId() == null) {
+            link.setDeckVersion(deckVersion);
+            link.setProduct(product);
+            link.setQuantityMultiplier(1);
+            link.setStatus("Active");
+        } else if (incrementMultiplier) {
+            link.setQuantityMultiplier(link.getQuantityMultiplier() + 1);
+        }
+        link.setAppliedAt(LocalDateTime.now());
+        return deckVersionProductRepository.save(link);
+    }
+
+    private void validateProductCanBeLinked(Product product) {
+        if (!"Active".equalsIgnoreCase(product.getStatus())) {
+            throw new ValidationErrorException("Product Cannot Be Linked", List.of(new ValidationError("status", "Product must be active.")));
+        }
     }
 
     private void validateProductCanBeApplied(Product product) {
