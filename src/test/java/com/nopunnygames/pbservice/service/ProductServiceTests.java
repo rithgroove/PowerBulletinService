@@ -5,6 +5,7 @@ import com.nopunnygames.pbservice.dto.CardPrintSetDto;
 import com.nopunnygames.pbservice.dto.CardVersionDto;
 import com.nopunnygames.pbservice.dto.DeckIdentityDto;
 import com.nopunnygames.pbservice.dto.DeckVersionDto;
+import com.nopunnygames.pbservice.dto.DeckVersionProductDto;
 import com.nopunnygames.pbservice.dto.ProductDeckApplicationDto;
 import com.nopunnygames.pbservice.dto.ProductDto;
 import com.nopunnygames.pbservice.dto.ProductItemDto;
@@ -120,6 +121,25 @@ class ProductServiceTests {
 
         assertThat(deleted.getId()).isEqualTo(item.getId());
         assertThat(productItemService.listByProduct(product.getId())).isEmpty();
+    }
+
+    @Test
+    void linksProductToDeckVersionWithoutChangingDeckEntries() {
+        ProductDto product = productService.create(product("CORE_LINK_ONLY", "Core Link Only"), null);
+        DeckVersionDto deckVersion = createDeckVersion("LINK_ONLY_DECK");
+
+        DeckVersionProductDto linked = productService.linkProductToDeckVersion(deckVersion.getId(), product.getId(), null);
+        DeckVersionProductDto linkedAgain = productService.linkProductToDeckVersion(deckVersion.getId(), product.getId(), null);
+
+        assertThat(linked.getProductId()).isEqualTo(product.getId());
+        assertThat(linked.getProductCode()).isEqualTo(product.getCode());
+        assertThat(linkedAgain.getQuantityMultiplier()).isEqualTo(1);
+        assertThat(productService.listLinkedProducts(deckVersion.getId())).hasSize(1);
+        assertThat(deckEntryRepository.findByDeckVersionIdOrderByIdAsc(deckVersion.getId())).isEmpty();
+
+        productService.unlinkProductFromDeckVersion(deckVersion.getId(), product.getId(), null);
+
+        assertThat(productService.listLinkedProducts(deckVersion.getId())).isEmpty();
     }
 
     @Test
