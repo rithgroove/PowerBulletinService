@@ -71,6 +71,40 @@ class PowerBulletinCmsQueryServiceTests {
     }
 
     @Test
+    void simulationRunDetailIncludesPlayerOutcomeRatesWhenGameSummariesExist() {
+        jdbcTemplate.execute("""
+                CREATE TABLE game_summaries (
+                    run_id UUID,
+                    winner_player_index INTEGER,
+                    deck_out BOOLEAN,
+                    final_hand_powers JSON
+                )
+                """);
+        jdbcTemplate.update("INSERT INTO game_summaries (run_id, winner_player_index, deck_out, final_hand_powers) VALUES (?, 0, false, '[8, 4, 3, 2]')", runId);
+        jdbcTemplate.update("INSERT INTO game_summaries (run_id, winner_player_index, deck_out, final_hand_powers) VALUES (?, 1, false, '[1, 7, 3, 2]')", runId);
+        jdbcTemplate.update("INSERT INTO game_summaries (run_id, winner_player_index, deck_out, final_hand_powers) VALUES (?, null, true, '[5, 5, 1, 0]')", runId);
+        jdbcTemplate.update("INSERT INTO game_summaries (run_id, winner_player_index, deck_out, final_hand_powers) VALUES (?, null, true, '[2, 3, 4, 4]')", runId);
+
+        Map<String, Object> detail = queryService.simulationRunDetail(runId);
+
+        List<Map<String, Object>> outcomes = rows(detail, "playerOutcomeRates");
+        assertThat(outcomes).hasSize(4);
+        assertThat(outcomes.get(0))
+                .containsEntry("player_label", "Player 1")
+                .containsEntry("game_count", 4)
+                .containsEntry("win_count", 1)
+                .containsEntry("tie_count", 1)
+                .containsEntry("loss_count", 2);
+        assertThat(outcomes.get(0).get("win_rate")).isEqualTo(0.25);
+        assertThat(outcomes.get(0).get("tie_rate")).isEqualTo(0.25);
+        assertThat(outcomes.get(1).get("win_count")).isEqualTo(1);
+        assertThat(outcomes.get(1).get("tie_count")).isEqualTo(1);
+        assertThat(outcomes.get(2).get("tie_count")).isEqualTo(1);
+        assertThat(outcomes.get(3).get("tie_count")).isEqualTo(1);
+        assertThat(detail.get("player_outcome_rates")).isSameAs(outcomes);
+    }
+
+    @Test
     void simulationRunDetailIncludesInteractionMetricsWhenPresent() {
         createInteractionTables();
         jdbcTemplate.update("""
@@ -116,6 +150,35 @@ class PowerBulletinCmsQueryServiceTests {
         assertThat(summary.getFirst().get("card_code")).isEqualTo("NECROMANCER_V1");
         assertThat(summary.getFirst().get("interaction_centrality_score")).isEqualTo(9.5);
         assertThat(detail.get("card_interaction_summary_metrics")).isSameAs(summary);
+    }
+
+    @Test
+    void simulationRunDetailReadsSimulatorNativePowerPressureRows() {
+        jdbcTemplate.execute("""
+                CREATE TABLE power_pressure_interaction_metrics (
+                    run_id UUID,
+                    source_card_code TEXT,
+                    removed_card_code TEXT,
+                    removed_card_power INTEGER,
+                    removed_card_faction TEXT,
+                    removed_card_type TEXT,
+                    was_high_power_card BOOLEAN,
+                    removal_count INTEGER
+                )
+                """);
+        jdbcTemplate.update("""
+                INSERT INTO power_pressure_interaction_metrics (
+                    run_id, source_card_code, removed_card_code, removed_card_power,
+                    removed_card_faction, removed_card_type, was_high_power_card, removal_count
+                ) VALUES (?, 'VILLAIN_ATTACKER_V1', 'HERO_HITMAN_V1', 6, 'HERO', 'ACTION', true, 7)
+                """, runId);
+
+        Map<String, Object> detail = queryService.simulationRunDetail(runId);
+
+        List<Map<String, Object>> rows = rows(detail, "powerPressureInteractionMetrics");
+        assertThat(rows).hasSize(1);
+        assertThat(rows.getFirst().get("removal_count")).isEqualTo(7);
+        assertThat(detail.get("power_pressure_interaction_metrics")).isSameAs(rows);
     }
 
     @Test

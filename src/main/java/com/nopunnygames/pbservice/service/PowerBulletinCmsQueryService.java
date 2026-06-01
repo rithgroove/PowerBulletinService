@@ -1,5 +1,7 @@
 package com.nopunnygames.pbservice.service;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 
@@ -7,6 +9,7 @@ import java.sql.Connection;
 import java.sql.DatabaseMetaData;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -20,6 +23,7 @@ import java.util.UUID;
  */
 @Service
 public class PowerBulletinCmsQueryService {
+    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
     private static final Map<String, String> CARD_SORT_COLUMNS = Map.ofEntries(
             Map.entry("code", "LOWER(ci.code)"),
             Map.entry("name", "LOWER(ci.name)"),
@@ -557,6 +561,8 @@ public class PowerBulletinCmsQueryService {
         detail.put("advancedMetrics", optionalQueryForMap("SELECT * FROM advanced_run_metric_summaries WHERE run_id = ?", runId));
         detail.put("turnCurveMetrics", jdbcTemplate.queryForList("SELECT * FROM turn_curve_metric_summaries WHERE run_id = ? ORDER BY turn_number ASC", runId));
         detail.put("turnCountDistribution", turnCountDistribution(runId));
+        detail.put("playerOutcomeRates", playerOutcomeRates(runId, run));
+        detail.put("player_outcome_rates", detail.get("playerOutcomeRates"));
         detail.put("cardMetrics", jdbcTemplate.queryForList("SELECT * FROM card_metric_summaries WHERE run_id = ? ORDER BY played_win_rate DESC, card_version_code ASC", runId));
         detail.put("cardGravityMetrics", jdbcTemplate.queryForList("SELECT * FROM card_gravity_metric_summaries WHERE run_id = ? ORDER BY card_gravity_score DESC, card_version_code ASC", runId));
         detail.put("effectMetrics", jdbcTemplate.queryForList("SELECT * FROM effect_metric_summaries WHERE run_id = ? ORDER BY effect_resolve_count DESC, effect_code ASC", runId));
@@ -593,12 +599,11 @@ public class PowerBulletinCmsQueryService {
                 discarded_card_code ASC,
                 triggered_card_code ASC
                 """);
-        List<Map<String, Object>> powerPressureInteractionMetrics = optionalMetricRows("power_pressure_interaction_metrics", runId, """
-                was_high_power_card DESC,
-                COALESCE(removed_count, removal_count) DESC,
-                source_card_code ASC,
-                removed_card_code ASC
-                """);
+        List<Map<String, Object>> powerPressureInteractionMetrics = optionalMetricRows(
+                "power_pressure_interaction_metrics",
+                runId,
+                powerPressureOrderClause()
+        );
         List<Map<String, Object>> cardInteractionSummaryMetrics = optionalMetricRows("card_interaction_summary_metrics", runId, """
                 interaction_centrality_score DESC,
                 interaction_degree DESC,
@@ -772,6 +777,145 @@ public class PowerBulletinCmsQueryService {
                 """, runId);
     }
 
+    private List<Map<String, Object>> playerOutcomeRates(UUID runId, Map<String, Object> run) {
+        if (!tableExists("game_summaries")
+                || !columnExists("game_summaries", "winner_player_index")
+                || !columnExists("game_summaries", "final_hand_powers")
+                || !columnExists("game_summaries", "deck_out")) {
+            return List.of();
+        }
+        int playerCount = intValue(run.get("player_count"));
+        if (playerCount <= 0) {
+            return List.of();
+        }
+        List<Map<String, Object>> games = jdbcTemplate.queryForList("""
+                SELECT
+                    winner_player_index,
+                    deck_out,
+                    final_hand_powers
+                FROM game_summaries
+                WHERE run_id = ?
+                """, runId);
+        if (games.isEmpty()) {
+            return List.of();
+        }
+        int[] wins = new int[playerCount];
+        int[] ties = new int[playerCount];
+        for (Map<String, Object> game : games) {
+            Integer winnerIndex = nullableIntValue(game.get("winner_player_index"));
+            if (winnerIndex != null && winnerIndex >= 0 && winnerIndex < playerCount) {
+                wins[winnerIndex] += 1;
+                continue;
+            }
+            if (booleanValue(game.get("deck_out"))) {
+                for (Integer tiedIndex : tiedPlayerIndexes(game.get("final_hand_powers"), playerCount)) {
+                    ties[tiedIndex] += 1;
+                }
+            }
+        }
+        List<Map<String, Object>> rows = new ArrayList<>();
+        int gameCount = games.size();
+        for (int playerIndex = 0; playerIndex < playerCount; playerIndex += 1) {
+            Map<String, Object> row = new LinkedHashMap<>();
+            row.put("player_index", playerIndex);
+            row.put("player_label", "Player " + (playerIndex + 1));
+            row.put("game_count", gameCount);
+            row.put("win_count", wins[playerIndex]);
+            row.put("tie_count", ties[playerIndex]);
+            row.put("loss_count", Math.max(0, gameCount - wins[playerIndex] - ties[playerIndex]));
+            row.put("win_rate", rate(wins[playerIndex], gameCount));
+            row.put("tie_rate", rate(ties[playerIndex], gameCount));
+            rows.add(row);
+        }
+        return rows;
+    }
+
+    private List<Integer> tiedPlayerIndexes(Object finalHandPowers, int playerCount) {
+        List<Integer> powers = intList(finalHandPowers);
+        if (powers.size() < 2) {
+            return List.of();
+        }
+        int boundedPlayerCount = Math.min(playerCount, powers.size());
+        int highestPower = Integer.MIN_VALUE;
+        for (int index = 0; index < boundedPlayerCount; index += 1) {
+            highestPower = Math.max(highestPower, powers.get(index));
+        }
+        List<Integer> tiedIndexes = new ArrayList<>();
+        for (int index = 0; index < boundedPlayerCount; index += 1) {
+            if (powers.get(index) == highestPower) {
+                tiedIndexes.add(index);
+            }
+        }
+        return tiedIndexes.size() > 1 ? tiedIndexes : List.of();
+    }
+
+    private List<Integer> intList(Object value) {
+        if (value == null) {
+            return List.of();
+        }
+        if (value instanceof Iterable<?> iterable) {
+            List<Integer> values = new ArrayList<>();
+            for (Object item : iterable) {
+                Integer intValue = nullableIntValue(item);
+                if (intValue != null) {
+                    values.add(intValue);
+                }
+            }
+            return values;
+        }
+        String jsonValue = value instanceof byte[] bytes
+                ? new String(bytes, StandardCharsets.UTF_8)
+                : value.toString();
+        try {
+            JsonNode json = OBJECT_MAPPER.readTree(jsonValue);
+            if (json.isTextual()) {
+                json = OBJECT_MAPPER.readTree(json.asText());
+            }
+            if (!json.isArray()) {
+                return List.of();
+            }
+            List<Integer> values = new ArrayList<>();
+            for (JsonNode item : json) {
+                if (item.isNumber()) {
+                    values.add(item.asInt());
+                }
+            }
+            return values;
+        } catch (Exception ignored) {
+            return List.of();
+        }
+    }
+
+    private int intValue(Object value) {
+        Integer parsed = nullableIntValue(value);
+        return parsed == null ? 0 : parsed;
+    }
+
+    private Integer nullableIntValue(Object value) {
+        if (value == null) {
+            return null;
+        }
+        if (value instanceof Number number) {
+            return number.intValue();
+        }
+        try {
+            return Integer.parseInt(value.toString());
+        } catch (NumberFormatException exception) {
+            return null;
+        }
+    }
+
+    private boolean booleanValue(Object value) {
+        if (value instanceof Boolean bool) {
+            return bool;
+        }
+        return value != null && Boolean.parseBoolean(value.toString());
+    }
+
+    private double rate(int numerator, int denominator) {
+        return denominator <= 0 ? 0 : (double) numerator / denominator;
+    }
+
     /**
      * Reads rows from optional simulator metric tables when present.
      *
@@ -786,6 +930,18 @@ public class PowerBulletinCmsQueryService {
         }
         String sql = "SELECT * FROM " + tableName + " WHERE run_id = ? ORDER BY " + orderClause;
         return jdbcTemplate.queryForList(sql, runId);
+    }
+
+    private String powerPressureOrderClause() {
+        String countColumn = columnExists("power_pressure_interaction_metrics", "removed_count")
+                ? "COALESCE(removed_count, removal_count)"
+                : "removal_count";
+        return """
+                was_high_power_card DESC,
+                %s DESC,
+                source_card_code ASC,
+                removed_card_code ASC
+                """.formatted(countColumn);
     }
 
     private boolean columnExists(String tableName, String columnName) {
