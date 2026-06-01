@@ -1,0 +1,4 @@
+ALTER TABLE card_metric_summaries
+    ADD COLUMN IF NOT EXISTS end_hand_player_count INTEGER NOT NULL DEFAULT 0,
+    ADD COLUMN IF NOT EXISTS end_hand_player_win_count INTEGER NOT NULL DEFAULT 0,
+    ADD COLUMN IF NOT EXISTS end_hand_win_rate DOUBLE PRECISION NOT NULL DEFAULT 0;

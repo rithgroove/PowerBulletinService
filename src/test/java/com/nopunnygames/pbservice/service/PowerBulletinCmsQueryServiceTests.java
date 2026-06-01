@@ -289,7 +289,7 @@ class PowerBulletinCmsQueryServiceTests {
                 )
                 """);
         jdbcTemplate.execute("CREATE TABLE turn_curve_metric_summaries (run_id UUID, turn_number INTEGER)");
-        jdbcTemplate.execute("CREATE TABLE card_metric_summaries (run_id UUID, card_version_code TEXT, played_win_rate DOUBLE PRECISION)");
+        jdbcTemplate.execute("CREATE TABLE card_metric_summaries (run_id UUID, card_version_code TEXT, played_win_rate DOUBLE PRECISION, end_hand_win_rate DOUBLE PRECISION, end_hand_player_count INTEGER, end_hand_player_win_count INTEGER)");
         jdbcTemplate.execute("CREATE TABLE card_gravity_metric_summaries (run_id UUID, card_version_code TEXT, card_gravity_score DOUBLE PRECISION)");
         jdbcTemplate.execute("CREATE TABLE effect_metric_summaries (run_id UUID, effect_code TEXT, effect_resolve_count INTEGER)");
     }
