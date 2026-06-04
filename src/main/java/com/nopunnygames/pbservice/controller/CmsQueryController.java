@@ -5,6 +5,7 @@ import com.nopunnygames.tanuki.core.response.ApiResponse;
 import com.nopunnygames.tanuki.core.response.PageMeta;
 import com.nopunnygames.tanuki.core.response.PagedResponse;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -243,6 +244,17 @@ public class CmsQueryController {
     }
 
     /**
+     * Deletes one persisted simulation run.
+     *
+     * @param runId simulation run UUID
+     * @return deletion summary
+     */
+    @DeleteMapping("/simulation-runs/{runId}")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> deleteSimulationRun(@PathVariable UUID runId) {
+        return ResponseEntity.ok(new ApiResponse<>(200, queryService.deleteSimulationRun(runId)));
+    }
+
+    /**
      * Reads one simulation run and its metric summaries.
      *
      * @param runId simulation run UUID
@@ -264,6 +276,17 @@ public class CmsQueryController {
             @RequestParam(defaultValue = "10") int limit
     ) {
         return ResponseEntity.ok(new ApiResponse<>(200, paged(queryService.listSimulationRunGroups(), page, limit)));
+    }
+
+    /**
+     * Deletes one grouped simulation run and its child subruns.
+     *
+     * @param groupId grouped run UUID
+     * @return deletion summary
+     */
+    @DeleteMapping("/simulation-run-groups/{groupId}")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> deleteSimulationRunGroup(@PathVariable UUID groupId) {
+        return ResponseEntity.ok(new ApiResponse<>(200, queryService.deleteSimulationRunGroup(groupId)));
     }
 
     /**

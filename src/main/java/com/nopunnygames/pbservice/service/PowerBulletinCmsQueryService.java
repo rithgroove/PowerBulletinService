@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.sql.Connection;
 import java.sql.DatabaseMetaData;
@@ -100,7 +101,14 @@ public class PowerBulletinCmsQueryService {
             "on_discard_chain_metrics",
             "power_pressure_interaction_metrics",
             "card_interaction_summary_metrics",
+            "turn_curve_metric_summaries",
+            "card_gravity_metric_summaries",
+            "advanced_run_metric_summaries",
+            "effect_metric_summaries",
+            "card_metric_summaries",
+            "run_metric_summaries",
             "game_summaries",
+            "simulation_runs",
             "simulation_run_groups",
             "simulation_run_group_members",
             "simulation_run_group_summaries"
@@ -538,6 +546,53 @@ public class PowerBulletinCmsQueryService {
     }
 
     /**
+     * Deletes one persisted simulator run and its dependent result rows.
+     *
+     * @param runId simulation run UUID
+     * @return deletion summary
+     */
+    @Transactional
+    public Map<String, Object> deleteSimulationRun(UUID runId) {
+        Map<String, Object> summary = new LinkedHashMap<>();
+        int deletedRows = 0;
+        List<UUID> groupIds = simulationRunGroupIds(runId);
+
+        deletedRows += deleteSimulationRunChildren(runId, summary);
+        deletedRows += deleteSimulationRunMemberships(runId, summary);
+        deletedRows += deleteFromOptionalTableById("simulation_runs", runId, summary);
+        for (UUID groupId : groupIds) {
+            deletedRows += deleteSimulationRunGroupSummary(groupId, summary);
+        }
+
+        summary.put("deleted_rows", deletedRows);
+        return summary;
+    }
+
+    /**
+     * Deletes one persisted simulator run group and all child run result rows.
+     *
+     * @param groupId grouped run UUID
+     * @return deletion summary
+     */
+    @Transactional
+    public Map<String, Object> deleteSimulationRunGroup(UUID groupId) {
+        Map<String, Object> summary = new LinkedHashMap<>();
+        int deletedRows = 0;
+        List<UUID> runIds = simulationRunIdsForGroup(groupId);
+
+        deletedRows += deleteSimulationRunGroupSummary(groupId, summary);
+        deletedRows += deleteSimulationRunGroupMembers(groupId, summary);
+        for (UUID runId : runIds) {
+            deletedRows += deleteSimulationRunChildren(runId, summary);
+            deletedRows += deleteFromOptionalTableById("simulation_runs", runId, summary);
+        }
+        deletedRows += deleteFromOptionalTableById("simulation_run_groups", groupId, summary);
+
+        summary.put("deleted_rows", deletedRows);
+        return summary;
+    }
+
+    /**
      * Returns one simulation run and its metric tables.
      *
      * @param runId simulation run UUID
@@ -930,6 +985,97 @@ public class PowerBulletinCmsQueryService {
         }
         String sql = "SELECT * FROM " + tableName + " WHERE run_id = ? ORDER BY " + orderClause;
         return jdbcTemplate.queryForList(sql, runId);
+    }
+
+    private int deleteSimulationRunChildren(UUID runId, Map<String, Object> summary) {
+        int deletedRows = 0;
+        deletedRows += deleteFromOptionalTableByRunId("card_pair_metrics", runId, summary);
+        deletedRows += deleteFromOptionalTableByRunId("card_sequence_metrics", runId, summary);
+        deletedRows += deleteFromOptionalTableByRunId("card_counter_metrics", runId, summary);
+        deletedRows += deleteFromOptionalTableByRunId("reaction_interaction_metrics", runId, summary);
+        deletedRows += deleteFromOptionalTableByRunId("on_discard_chain_metrics", runId, summary);
+        deletedRows += deleteFromOptionalTableByRunId("power_pressure_interaction_metrics", runId, summary);
+        deletedRows += deleteFromOptionalTableByRunId("card_interaction_summary_metrics", runId, summary);
+        deletedRows += deleteFromOptionalTableByRunId("turn_curve_metric_summaries", runId, summary);
+        deletedRows += deleteFromOptionalTableByRunId("card_gravity_metric_summaries", runId, summary);
+        deletedRows += deleteFromOptionalTableByRunId("advanced_run_metric_summaries", runId, summary);
+        deletedRows += deleteFromOptionalTableByRunId("effect_metric_summaries", runId, summary);
+        deletedRows += deleteFromOptionalTableByRunId("card_metric_summaries", runId, summary);
+        deletedRows += deleteFromOptionalTableByRunId("run_metric_summaries", runId, summary);
+        deletedRows += deleteFromOptionalTableByRunId("game_summaries", runId, summary);
+        return deletedRows;
+    }
+
+    private int deleteSimulationRunMemberships(UUID runId, Map<String, Object> summary) {
+        if (!tableExists("simulation_run_group_members")) {
+            summary.put("simulation_run_group_members", 0);
+            return 0;
+        }
+        int deletedRows = jdbcTemplate.update("DELETE FROM simulation_run_group_members WHERE run_id = ?", runId);
+        summary.put("simulation_run_group_members", deletedRows);
+        return deletedRows;
+    }
+
+    private int deleteSimulationRunGroupMembers(UUID groupId, Map<String, Object> summary) {
+        if (!tableExists("simulation_run_group_members")) {
+            summary.put("simulation_run_group_members", 0);
+            return 0;
+        }
+        int deletedRows = jdbcTemplate.update("DELETE FROM simulation_run_group_members WHERE run_group_id = ?", groupId);
+        summary.put("simulation_run_group_members", deletedRows);
+        return deletedRows;
+    }
+
+    private int deleteSimulationRunGroupSummary(UUID groupId, Map<String, Object> summary) {
+        if (!tableExists("simulation_run_group_summaries")) {
+            summary.put("simulation_run_group_summaries", 0);
+            return 0;
+        }
+        int deletedRows = jdbcTemplate.update("DELETE FROM simulation_run_group_summaries WHERE run_group_id = ?", groupId);
+        summary.put("simulation_run_group_summaries", deletedRows);
+        return deletedRows;
+    }
+
+    private int deleteFromOptionalTableByRunId(String tableName, UUID runId, Map<String, Object> summary) {
+        if (!tableExists(tableName) || !columnExists(tableName, "run_id")) {
+            summary.put(tableName, 0);
+            return 0;
+        }
+        int deletedRows = jdbcTemplate.update("DELETE FROM " + tableName + " WHERE run_id = ?", runId);
+        summary.put(tableName, deletedRows);
+        return deletedRows;
+    }
+
+    private int deleteFromOptionalTableById(String tableName, UUID id, Map<String, Object> summary) {
+        if (!tableExists(tableName) || !columnExists(tableName, "id")) {
+            summary.put(tableName, 0);
+            return 0;
+        }
+        int deletedRows = jdbcTemplate.update("DELETE FROM " + tableName + " WHERE id = ?", id);
+        summary.put(tableName, deletedRows);
+        return deletedRows;
+    }
+
+    private List<UUID> simulationRunIdsForGroup(UUID groupId) {
+        List<UUID> runIds = new ArrayList<>();
+        if (tableExists("simulation_runs") && columnExists("simulation_runs", "run_group_id")) {
+            runIds.addAll(jdbcTemplate.queryForList("SELECT id FROM simulation_runs WHERE run_group_id = ?", UUID.class, groupId));
+        }
+        if (tableExists("simulation_run_group_members")) {
+            runIds.addAll(jdbcTemplate.queryForList("SELECT run_id FROM simulation_run_group_members WHERE run_group_id = ?", UUID.class, groupId));
+        }
+        return runIds.stream().distinct().toList();
+    }
+
+    private List<UUID> simulationRunGroupIds(UUID runId) {
+        List<UUID> groupIds = new ArrayList<>();
+        if (tableExists("simulation_runs") && columnExists("simulation_runs", "run_group_id")) {
+            groupIds.addAll(jdbcTemplate.queryForList("SELECT run_group_id FROM simulation_runs WHERE id = ? AND run_group_id IS NOT NULL", UUID.class, runId));
+        }
+        if (tableExists("simulation_run_group_members")) {
+            groupIds.addAll(jdbcTemplate.queryForList("SELECT run_group_id FROM simulation_run_group_members WHERE run_id = ?", UUID.class, runId));
+        }
+        return groupIds.stream().distinct().toList();
     }
 
     private String powerPressureOrderClause() {
