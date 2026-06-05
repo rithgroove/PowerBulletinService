@@ -5,16 +5,15 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "${SCRIPT_DIR}"
 
 REMOTE_HOST="${REMOTE_HOST:-contabo}"
-REMOTE_DEPLOY_DIR="${REMOTE_DEPLOY_DIR:-~/npg-deploy/pb-service}"
-REMOTE_NETWORK="${REMOTE_NETWORK:-postgres_default}"
+REMOTE_DEPLOY_ROOT="${REMOTE_DEPLOY_ROOT:-~/npg-deploy}"
+REMOTE_DEPLOY_DIR="${REMOTE_DEPLOY_DIR:-${REMOTE_DEPLOY_ROOT}/pb-service}"
+REMOTE_COMPOSE_FILE="${REMOTE_COMPOSE_FILE:-docker-compose.local.yml}"
+COMPOSE_SERVICE="${COMPOSE_SERVICE:-pb-service}"
 DEPLOY_ENV_FILE="${DEPLOY_ENV_FILE:-.env.docker}"
 
 IMAGE_NAME="${IMAGE_NAME:-nopunnygames/pb-service}"
 IMAGE_TAG="${IMAGE_TAG:-$(date +%Y%m%d%H%M%S)}"
 CONTAINER_NAME="${CONTAINER_NAME:-pb-service}"
-
-HOST_BIND="${HOST_BIND:-127.0.0.1}"
-HOST_PORT="${HOST_PORT:-8083}"
 CONTAINER_PORT="${CONTAINER_PORT:-8083}"
 
 RUN_TESTS="${RUN_TESTS:-false}"
@@ -79,30 +78,20 @@ IMAGE_REF="${IMAGE_NAME}:${IMAGE_TAG}"
 IMAGE_LATEST="${IMAGE_NAME}:latest"
 ARCHIVE_NAME="pb-service-${IMAGE_TAG}.tar.gz"
 ARCHIVE_PATH="build/deploy/${ARCHIVE_NAME}"
-RUNTIME_ENV_PATH="build/deploy/runtime.env"
 
 docker build -t "${IMAGE_REF}" -t "${IMAGE_LATEST}" -f Dockerfile .
 docker save "${IMAGE_REF}" | gzip -c > "${ARCHIVE_PATH}"
 
-grep -E '^[A-Za-z_][A-Za-z0-9_]*=' "${DEPLOY_ENV_FILE}" \
-  | grep -vE '^(REMOTE_|IMAGE_|CONTAINER_|HOST_|RUN_TESTS|DEPLOY_ENV_FILE|REMOTE_DATABASE_PASSWORD)=' \
-  > "${RUNTIME_ENV_PATH}" || true
-
 ssh "${REMOTE_HOST}" "mkdir -p ${REMOTE_DEPLOY_DIR}"
-scp "${ARCHIVE_PATH}" "${RUNTIME_ENV_PATH}" "${REMOTE_HOST}:${REMOTE_DEPLOY_DIR}/"
+scp "${ARCHIVE_PATH}" "${REMOTE_HOST}:${REMOTE_DEPLOY_DIR}/"
 
 ssh "${REMOTE_HOST}" "\
   set -euo pipefail; \
-  cd ${REMOTE_DEPLOY_DIR}; \
-  gzip -dc ${ARCHIVE_NAME} | docker load; \
-  if docker ps -a --format '{{.Names}}' | grep -qx '${CONTAINER_NAME}'; then docker rm -f '${CONTAINER_NAME}'; fi; \
-  docker run -d \
-    --name '${CONTAINER_NAME}' \
-    --restart unless-stopped \
-    --network '${REMOTE_NETWORK}' \
-    -p '${HOST_BIND}:${HOST_PORT}:${CONTAINER_PORT}' \
-    --env-file runtime.env \
-    '${IMAGE_REF}'; \
-  docker ps --filter name='^/${CONTAINER_NAME}$'"
+  cd ${REMOTE_DEPLOY_ROOT}; \
+  gzip -dc ${COMPOSE_SERVICE}/${ARCHIVE_NAME} | docker load; \
+  cp '${REMOTE_COMPOSE_FILE}' '${REMOTE_COMPOSE_FILE}.bak-${IMAGE_TAG}-${COMPOSE_SERVICE}'; \
+  sed -i '/^  ${COMPOSE_SERVICE}:/,/^  [A-Za-z0-9_-]*:/ s#^\([[:space:]]*image: \).*#\1${IMAGE_REF}#' '${REMOTE_COMPOSE_FILE}'; \
+  docker compose -f '${REMOTE_COMPOSE_FILE}' up -d --no-deps '${COMPOSE_SERVICE}'; \
+  docker compose -f '${REMOTE_COMPOSE_FILE}' ps '${COMPOSE_SERVICE}'"
 
-echo "Deployed ${IMAGE_REF} to ${REMOTE_HOST} as ${CONTAINER_NAME}."
+echo "Deployed ${IMAGE_REF} to ${REMOTE_HOST} compose service ${COMPOSE_SERVICE}."
