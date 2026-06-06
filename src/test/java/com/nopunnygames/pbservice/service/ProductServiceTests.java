@@ -3,6 +3,7 @@ package com.nopunnygames.pbservice.service;
 import com.nopunnygames.pbservice.dto.CardIdentityDto;
 import com.nopunnygames.pbservice.dto.CardPrintSetDto;
 import com.nopunnygames.pbservice.dto.CardVersionDto;
+import com.nopunnygames.pbservice.dto.DeckEntryDto;
 import com.nopunnygames.pbservice.dto.DeckIdentityDto;
 import com.nopunnygames.pbservice.dto.DeckVersionDto;
 import com.nopunnygames.pbservice.dto.DeckVersionProductDto;
@@ -18,6 +19,7 @@ import com.nopunnygames.pbservice.repository.DeckEntryRepository;
 import com.nopunnygames.tanuki.core.exception.ObjectNotFoundException;
 import com.nopunnygames.tanuki.core.exception.ValidationErrorException;
 import com.nopunnygames.tanuki.core.response.PagedResponse;
+import jakarta.persistence.EntityManager;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -35,6 +37,11 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * Service tests for product catalog behavior.
  */
 @SpringBootTest(properties = {
+        "spring.datasource.url=jdbc:h2:mem:pb_service_product_tests;DB_CLOSE_DELAY=-1;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;DEFAULT_NULL_ORDERING=HIGH",
+        "spring.datasource.username=sa",
+        "spring.datasource.password=",
+        "spring.datasource.driver-class-name=org.h2.Driver",
+        "spring.jpa.properties.hibernate.dialect=org.hibernate.dialect.H2Dialect",
         "seed.power-bulletin.enabled=false",
         "spring.jpa.hibernate.ddl-auto=create-drop",
         "spring.flyway.enabled=false"
@@ -66,7 +73,13 @@ class ProductServiceTests {
     private DeckVersionService deckVersionService;
 
     @Autowired
+    private DeckEntryService deckEntryService;
+
+    @Autowired
     private DeckEntryRepository deckEntryRepository;
+
+    @Autowired
+    private EntityManager entityManager;
 
     @Test
     void createsListsSearchesUpdatesAndDeletesProduct() {
@@ -140,6 +153,53 @@ class ProductServiceTests {
         productService.unlinkProductFromDeckVersion(deckVersion.getId(), product.getId(), null);
 
         assertThat(productService.listLinkedProducts(deckVersion.getId())).isEmpty();
+    }
+
+    @Test
+    void softDeletesDeckEntryWithResolvedPrintSet() {
+        DeckVersionDto deckVersion = createDeckVersion("DELETE_ENTRY_DECK");
+        CardPrintSetDto printSet = createPrintSet("DELETE_ENTRY_CARD");
+        DeckEntryDto entry = new DeckEntryDto();
+        entry.setDeckVersionId(deckVersion.getId());
+        entry.setCardPrintSetId(printSet.getId());
+        entry = deckEntryService.create(entry, null);
+
+        DeckEntryDto deleted = deckEntryService.delete(entry.getId(), null);
+
+        assertThat(deleted.getId()).isEqualTo(entry.getId());
+        assertThat(deleted.getPrintSet()).isNotNull();
+        assertThat(deleted.getPrintSet().getCode()).isEqualTo(printSet.getCode());
+        entityManager.flush();
+        entityManager.clear();
+        Object deletedAt = entityManager.createNativeQuery("SELECT deleted_at FROM deck_entries WHERE id = :id")
+                .setParameter("id", entry.getId())
+                .getSingleResult();
+        assertThat(deletedAt).isNotNull();
+    }
+
+    @Test
+    void recreatingSoftDeletedDeckEntryRestoresExistingRow() {
+        DeckVersionDto deckVersion = createDeckVersion("RESTORE_ENTRY_DECK");
+        CardPrintSetDto printSet = createPrintSet("RESTORE_ENTRY_CARD");
+        DeckEntryDto entry = new DeckEntryDto();
+        entry.setDeckVersionId(deckVersion.getId());
+        entry.setCardPrintSetId(printSet.getId());
+        entry = deckEntryService.create(entry, null);
+
+        deckEntryService.delete(entry.getId(), null);
+        DeckEntryDto restored = new DeckEntryDto();
+        restored.setDeckVersionId(deckVersion.getId());
+        restored.setCardPrintSetId(printSet.getId());
+        restored = deckEntryService.create(restored, null);
+
+        assertThat(restored.getId()).isEqualTo(entry.getId());
+        assertThat(restored.getPrintSet()).isNotNull();
+        entityManager.flush();
+        entityManager.clear();
+        Object deletedAt = entityManager.createNativeQuery("SELECT deleted_at FROM deck_entries WHERE id = :id")
+                .setParameter("id", entry.getId())
+                .getSingleResult();
+        assertThat(deletedAt).isNull();
     }
 
     @Test

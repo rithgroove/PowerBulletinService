@@ -216,6 +216,16 @@ public class CmsQueryController {
     }
 
     /**
+     * Lists grouped simulation run filter options.
+     *
+     * @return filter options
+     */
+    @GetMapping("/simulation-run-groups/filter-options")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> simulationRunGroupFilterOptions() {
+        return ResponseEntity.ok(new ApiResponse<>(200, queryService.simulationRunGroupFilterOptions()));
+    }
+
+    /**
      * Lists simulation runs.
      *
      * @param sortBy sort key
@@ -272,10 +282,19 @@ public class CmsQueryController {
      */
     @GetMapping("/simulation-run-groups")
     public ResponseEntity<ApiResponse<PagedResponse<Map<String, Object>>>> simulationRunGroups(
+            @RequestParam(name = "sort_by", defaultValue = "created_at") String sortBy,
+            @RequestParam(name = "sort_direction", defaultValue = "desc") String sortDirection,
+            @RequestParam(defaultValue = "") String deck,
+            @RequestParam(defaultValue = "") String search,
             @RequestParam(defaultValue = "1") int page,
             @RequestParam(defaultValue = "10") int limit
     ) {
-        return ResponseEntity.ok(new ApiResponse<>(200, paged(queryService.listSimulationRunGroups(), page, limit)));
+        return ResponseEntity.ok(new ApiResponse<>(200, paged(queryService.listSimulationRunGroups(
+                sortBy,
+                sortDirection,
+                deck,
+                search
+        ), page, limit)));
     }
 
     /**

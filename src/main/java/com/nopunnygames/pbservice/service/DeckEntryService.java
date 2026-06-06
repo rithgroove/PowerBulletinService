@@ -16,6 +16,7 @@ import com.nopunnygames.tanuki.core.service.BaseService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
@@ -82,6 +83,16 @@ public class DeckEntryService extends BaseService<DeckEntry, UUID, DeckEntryDto>
         CardPrintSet cardPrintSet = cardPrintSetRepository.findById(dto.getCardPrintSetId())
                 .orElseThrow(() -> new ObjectNotFoundException("Card print set " + dto.getCardPrintSetId() + " not found"));
 
+        DeckEntry existing = repository.findAnyByDeckVersionIdAndCardPrintSetId(deckVersion.getId(), cardPrintSet.getId())
+                .orElse(null);
+        if (existing != null) {
+            fillEntity(existing, dto, deckVersion, cardPrintSet);
+            existing.setDeletedAt(null);
+            existing.setDeletedByID(null);
+            existing.setDeletedByName(null);
+            return repository.save(existing).toCompleteDto();
+        }
+
         DeckEntry entity = new DeckEntry();
         fillEntity(entity, dto, deckVersion, cardPrintSet);
         return repository.save(entity).toCompleteDto();
@@ -115,6 +126,23 @@ public class DeckEntryService extends BaseService<DeckEntry, UUID, DeckEntryDto>
                 .stream()
                 .map(DeckEntry::toCompleteDto)
                 .toList();
+    }
+
+    @Override
+    @Transactional
+    public DeckEntryDto delete(UUID id, AuthUser user) {
+        DeckEntry entity = repository.findById(id)
+                .orElseThrow(() -> new ObjectNotFoundException("Deck entry " + id + " not found"));
+        DeckEntryDto dto = entity.toCompleteDto();
+
+        entity.setDeletedAt(LocalDateTime.now());
+        if (user != null) {
+            entity.setDeletedByID(UUID.fromString(user.userId()));
+            entity.setDeletedByName(user.userName());
+        }
+        repository.save(entity);
+
+        return dto;
     }
 
     private void fillEntity(DeckEntry entity, DeckEntryDto dto, DeckVersion deckVersion, CardPrintSet cardPrintSet) {

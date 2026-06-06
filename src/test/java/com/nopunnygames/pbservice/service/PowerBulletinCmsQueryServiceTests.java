@@ -182,6 +182,46 @@ class PowerBulletinCmsQueryServiceTests {
     }
 
     @Test
+    void deckEntryListIncludesCardIdentityIdsForCmsForms() {
+        UUID deckVersionId = UUID.randomUUID();
+        UUID cardIdentityId = UUID.randomUUID();
+        UUID cardVersionId = UUID.randomUUID();
+        UUID printSetId = UUID.randomUUID();
+        UUID entryId = UUID.randomUUID();
+        createDeckEntryTables();
+        jdbcTemplate.update("""
+                INSERT INTO card_identities (id, name, faction, deleted_at)
+                VALUES (?, 'ATTACKER', 'HERO', null)
+                """, cardIdentityId);
+        jdbcTemplate.update("""
+                INSERT INTO card_versions (id, card_identity_id, version_name, card_type, deleted_at)
+                VALUES (?, ?, 'v1', 'ACTION', null)
+                """, cardVersionId, cardIdentityId);
+        jdbcTemplate.update("""
+                INSERT INTO card_print_sets (id, card_version_id, code, deleted_at)
+                VALUES (?, ?, 'HERO_ATTACKER_V1_STANDARD', null)
+                """, printSetId, cardVersionId);
+        jdbcTemplate.update("""
+                INSERT INTO deck_entries (id, deck_version_id, card_print_set_id, quantity, deleted_at)
+                VALUES (?, ?, ?, 1, null)
+                """, entryId, deckVersionId, printSetId);
+
+        List<Map<String, Object>> entries = queryService.listDeckEntries(
+                deckVersionId,
+                "",
+                "",
+                "",
+                "faction",
+                "asc"
+        );
+
+        assertThat(entries).hasSize(1);
+        assertThat(entries.getFirst())
+                .containsEntry("card_identity_id", cardIdentityId)
+                .containsEntry("cardIdentityId", cardIdentityId);
+    }
+
+    @Test
     void groupedRunListAndDetailReturnMetadataSubrunsAndSummary() {
         UUID groupId = UUID.randomUUID();
         createGroupedRunTables();
@@ -201,7 +241,7 @@ class PowerBulletinCmsQueryServiceTests {
                 VALUES (?, ?, '{"cross_player_summary":{"deck_out_rate_range":0.2}}', ?)
                 """, UUID.randomUUID(), groupId, Timestamp.from(Instant.parse("2026-05-31T00:00:00Z")));
 
-        assertThat(queryService.listSimulationRunGroups()).hasSize(1);
+        assertThat(queryService.listSimulationRunGroups("created_at", "desc", "", "")).hasSize(1);
         Map<String, Object> detail = queryService.simulationRunGroupDetail(groupId);
         assertThat(map(detail, "group")).containsEntry("run_group_code", "GROUP_A");
         assertThat((List<?>) detail.get("subruns")).hasSize(1);
@@ -401,6 +441,50 @@ class PowerBulletinCmsQueryServiceTests {
                     run_group_id UUID,
                     summary_json TEXT,
                     created_at TIMESTAMP
+                )
+                """);
+    }
+
+    private void createDeckEntryTables() {
+        jdbcTemplate.execute("""
+                CREATE TABLE card_identities (
+                    id UUID PRIMARY KEY,
+                    name TEXT NOT NULL,
+                    faction TEXT NOT NULL,
+                    deleted_at TIMESTAMP
+                )
+                """);
+        jdbcTemplate.execute("""
+                CREATE TABLE card_versions (
+                    id UUID PRIMARY KEY,
+                    card_identity_id UUID NOT NULL,
+                    version_name TEXT NOT NULL,
+                    card_type TEXT NOT NULL,
+                    deleted_at TIMESTAMP
+                )
+                """);
+        jdbcTemplate.execute("""
+                CREATE TABLE card_print_sets (
+                    id UUID PRIMARY KEY,
+                    card_version_id UUID NOT NULL,
+                    code TEXT NOT NULL,
+                    deleted_at TIMESTAMP
+                )
+                """);
+        jdbcTemplate.execute("""
+                CREATE TABLE card_print_set_powers (
+                    card_print_set_id UUID,
+                    power INTEGER,
+                    power_order INTEGER
+                )
+                """);
+        jdbcTemplate.execute("""
+                CREATE TABLE deck_entries (
+                    id UUID PRIMARY KEY,
+                    deck_version_id UUID NOT NULL,
+                    card_print_set_id UUID NOT NULL,
+                    quantity INTEGER NOT NULL,
+                    deleted_at TIMESTAMP
                 )
                 """);
     }
