@@ -95,6 +95,10 @@ public class PowerBulletinSeeder implements CommandLineRunner {
         upsertEffect("6d34eadc-ae18-5787-a58e-a4d940998404", "HERO_HEALER_V1", "power_bulletin.effects.implementations.power_bulletin_v1.hero_healer_v1_effect.HeroHealerV1Effect", "Hero Healer v1", "If active player has fewer than five cards after playing this card, their next draw phase draws one additional card.");
         upsertEffect("3a23c227-494c-5ac7-b99e-acb0d2e4137f", "HERO_SEER_V1", "power_bulletin.effects.implementations.power_bulletin_v1.hero_seer_v1_effect.HeroSeerV1Effect", "Hero Seer v1", "Active player may put one card from hand on the bottom of the deck, then draws one additional card next draw phase.");
         upsertEffect("a8747426-59ee-52c3-be38-549a2d5da5b4", "HERO_GUARD_V1", "power_bulletin.effects.implementations.power_bulletin_v1.hero_guard_v1_effect.HeroGuardV1Effect", "Hero Guard v1", "Negates a targeted pending effect against this player and draws one card.");
+        upsertEffect("11111111-1111-5111-8111-111111111111", "HERO_MIRROR_V1", "power_bulletin.effects.implementations.power_bulletin_v1.hero_mirror_v1_effect.HeroMirrorV1Effect", "Hero Mirror v1", "Copies a targeted pending action against this player and resolves the copy against a chosen target.");
+        upsertEffect("11111111-1111-5111-8111-111111111112", "HERO_MIRROR_V2", "power_bulletin.effects.implementations.power_bulletin_v1.hero_mirror_v2_effect.HeroMirrorV2Effect", "Hero Mirror v2", "Copies a targeted pending action against this player, resolves the copy against a chosen target, then draws one card.");
+        upsertEffect("22222222-2222-5222-8222-222222222222", "VILLAIN_BOUNCER_V1", "power_bulletin.effects.implementations.power_bulletin_v1.villain_bouncer_v1_effect.VillainBouncerV1Effect", "Villain Bouncer v1", "Retargets a targeted pending effect against this player to another player.");
+        upsertEffect("22222222-2222-5222-8222-222222222223", "VILLAIN_BOUNCER_V2", "power_bulletin.effects.implementations.power_bulletin_v1.villain_bouncer_v2_effect.VillainBouncerV2Effect", "Villain Bouncer v2", "Retargets a targeted pending effect against this player to another player, then draws one card.");
         upsertEffect("e1ca3e7f-3a55-52f2-8837-ce937a3e714b", "VILLAIN_ATTACKER_V1", "power_bulletin.effects.implementations.power_bulletin_v1.villain_attacker_v1_effect.VillainAttackerV1Effect", "Villain Attacker v1", "Target opponent discards one controller-chosen card.");
         upsertEffect("12ee8754-98a3-53dd-8c14-88baa92bc4fd", "VILLAIN_PROVOCATEUR_V1", "power_bulletin.effects.implementations.power_bulletin_v1.villain_provocateur_v1_effect.VillainProvocateurV1Effect", "Villain Provocateur v1", "Active player and target player each reveal a chosen card. Lower power is discarded; ties discard both.");
         upsertEffect("ff28f408-3813-5ac1-8a0b-5bc4312b7ae5", "VILLAIN_GAMBLER_V1", "power_bulletin.effects.implementations.power_bulletin_v1.villain_gambler_v1_effect.VillainGamblerV1Effect", "Villain Gambler v1", "Active player declares a card name. Target opponent discards all cards with that display name.");
@@ -112,6 +116,10 @@ public class PowerBulletinSeeder implements CommandLineRunner {
         upsertCard("671995da-376b-44e3-9a3f-90d52845c761", "HERO_HEALER", "HEALER", "Nightingale", Faction.HERO, "2108b673-1953-4784-96a6-d8dfc8d24589", CardType.ACTION, "If you have less than five cards in your hand after playing this card, draw two instead of one on your next draw phase.", "041949b9-c536-48e6-9439-935e4b93aded", List.of(2, 3, 3, 4));
         upsertCard("d45c2bca-7b00-4872-9805-9c3cc8bc863c", "HERO_SEER", "SEER", "Aurora", Faction.HERO, "9f42bd5e-58bd-4bfa-a5d3-ae50fff70165", CardType.ACTION, "Put one card from your hand to the bottom of the deck if you're able to. Draw two cards on your next draw phase.", "4c11360f-3081-4d6c-82d6-70349e0dab24", List.of(1, 2, 3, 3));
         upsertCard("e37f11a9-8e24-4620-8a7f-158419375e5a", "HERO_GUARD", "GUARD", "Milo", Faction.HERO, "6e51c2b8-b650-4e80-821d-1234c6dcd917", CardType.REACTION, "Play this when an opponent plays a card that targets you. Negate the effect and draw 1 card.", "47ee3463-9db8-4437-8fd7-53845d935c2f", List.of(1, 2, 2, 3));
+        upsertCard("11111111-1111-4111-8111-111111111111", "HERO_MIRROR", "MIRROR", "Iris", Faction.HERO, "33333333-3333-4333-8333-333333333333", CardType.REACTION, "Play this when an opponent plays an action card that targets you. Copy that action and choose another target for the copy.", "44444444-4444-4444-8444-444444444444", List.of(1, 2, 2, 3));
+        upsertCard("11111111-1111-4111-8111-111111111111", "HERO_MIRROR", "MIRROR", "Iris", Faction.HERO, "33333333-3333-4333-8333-333333333334", CardType.REACTION, "Play this when an opponent plays an action card that targets you. Copy that action, choose another target for the copy, then draw 1 card.", "44444444-4444-4444-8444-444444444445", List.of(1, 2, 2, 3), "V2");
+        upsertCard("22222222-2222-4222-8222-222222222222", "VILLAIN_BOUNCER", "BOUNCER", "Bruno", Faction.VILLAIN, "55555555-5555-4555-8555-555555555555", CardType.REACTION, "Play this when an opponent plays a card that targets you. Change that target to another player.", "66666666-6666-4666-8666-666666666666", List.of(1, 2, 3, 3));
+        upsertCard("22222222-2222-4222-8222-222222222222", "VILLAIN_BOUNCER", "BOUNCER", "Bruno", Faction.VILLAIN, "55555555-5555-4555-8555-555555555556", CardType.REACTION, "Play this when an opponent plays a card that targets you. Change that target to another player, then draw 1 card.", "66666666-6666-4666-8666-666666666667", List.of(1, 2, 3, 3), "V2");
         upsertCard("10135f2d-fe30-415f-bc67-c5f99c6ea3d9", "VILLAIN_ATTACKER", "ATTACKER", "Killa", Faction.VILLAIN, "cf0ffdd6-9ea5-4257-983c-72a6b5b41d06", CardType.ACTION, "Target opponent discard a card.", "c9fb5b9e-029f-419e-95c2-75ccc08fabb0", List.of(4, 5, 5, 6));
         upsertCard("1d1d63f9-f489-4a9c-9a5c-38771cb3fdbb", "VILLAIN_PROVOCATEUR", "PROVOCATEUR", "Miller", Faction.VILLAIN, "b1d22fe0-f5bd-470a-86c3-0e47fb11d3ec", CardType.ACTION, "You and target opponent reveal a card from each respective hand. Discard the card with lower power. In case of a tie discard both.", "a2d5422b-ea9d-43c5-b7cd-5b09818cea1a", List.of(2, 3, 3, 5));
         upsertCard("9a71e160-e1f6-4be4-ae23-7f1c1e65daf4", "VILLAIN_GAMBLER", "GAMBLER", "Victoria", Faction.VILLAIN, "d6870708-4a16-4980-b9c4-6f12c1cbd129", CardType.ACTION, "Choose an opponent and name a card. Look at the target opponent hand. That opponent must discard all cards with the mentioned name.", "b579f7fb-e8e2-4399-ad8c-49bc24a294ce", List.of(3, 4, 4, 5));
@@ -126,19 +134,19 @@ public class PowerBulletinSeeder implements CommandLineRunner {
     private void seedDecks() {
         DeckIdentity standard = upsertDeckIdentity("3d7d32b8-fa8a-401d-a14f-ff188eb46393", "STANDARD_POWER_BULLETIN", "Standard Power Bulletin Deck");
         DeckVersion standardVersion = upsertDeckVersion("dfc3b63b-82fb-49a9-9b0c-1b0ee958d11b", "STANDARD_POWER_BULLETIN_V0_0", standard, "v0.0", "Initial standard deck seed.");
-        for (String printSetCode : List.of("HERO_ATTACKER_V1_STANDARD", "HERO_HITMAN_V1_STANDARD", "HERO_HEALER_V1_STANDARD", "HERO_SEER_V1_STANDARD", "HERO_GUARD_V1_STANDARD", "VILLAIN_ATTACKER_V1_STANDARD", "VILLAIN_PROVOCATEUR_V1_STANDARD", "VILLAIN_GAMBLER_V1_STANDARD", "VILLAIN_VENGEANCE_V1_STANDARD", "VILLAIN_TACTICIAN_V1_STANDARD")) {
+        for (String printSetCode : List.of("HERO_ATTACKER_V1_STANDARD", "HERO_HITMAN_V1_STANDARD", "HERO_HEALER_V1_STANDARD", "HERO_SEER_V1_STANDARD", "HERO_GUARD_V1_STANDARD", "VILLAIN_BOUNCER_V1_STANDARD", "VILLAIN_ATTACKER_V1_STANDARD", "VILLAIN_PROVOCATEUR_V1_STANDARD", "VILLAIN_GAMBLER_V1_STANDARD", "VILLAIN_VENGEANCE_V1_STANDARD", "VILLAIN_TACTICIAN_V1_STANDARD")) {
             upsertDeckEntry(standardVersion, printSetCode);
         }
 
         DeckIdentity expanded = upsertDeckIdentity("e0b961cb-d6a1-411d-b79f-b65215dbfa0b", "PB_AND_HO_EXP", "Power Bulletin with Head Office Expansion");
         DeckVersion expandedVersion = upsertDeckVersion("10606258-0fef-4d30-98f8-4597af524c22", "PB_AND_HO_EXP_V1", expanded, "Head Office Test Bed v1", "Power Bulletin base set plus Head Office expansion.");
-        for (String printSetCode : List.of("CIVILIAN_REPORTER_V1_STANDARD", "CIVILIAN_SPY_V1_STANDARD", "HERO_GUARD_V1_STANDARD", "HERO_ATTACKER_V1_STANDARD", "HERO_HITMAN_V1_STANDARD", "HERO_SEER_V1_STANDARD", "HERO_HEALER_V1_STANDARD", "VILLAIN_GAMBLER_V1_STANDARD", "VILLAIN_ATTACKER_V1_STANDARD", "VILLAIN_PROVOCATEUR_V1_STANDARD", "VILLAIN_TACTICIAN_V1_STANDARD", "VILLAIN_VENGEANCE_V1_STANDARD")) {
+        for (String printSetCode : List.of("CIVILIAN_REPORTER_V1_STANDARD", "CIVILIAN_SPY_V1_STANDARD", "HERO_GUARD_V1_STANDARD", "VILLAIN_BOUNCER_V1_STANDARD", "HERO_ATTACKER_V1_STANDARD", "HERO_HITMAN_V1_STANDARD", "HERO_SEER_V1_STANDARD", "HERO_HEALER_V1_STANDARD", "VILLAIN_GAMBLER_V1_STANDARD", "VILLAIN_ATTACKER_V1_STANDARD", "VILLAIN_PROVOCATEUR_V1_STANDARD", "VILLAIN_TACTICIAN_V1_STANDARD", "VILLAIN_VENGEANCE_V1_STANDARD")) {
             upsertDeckEntry(expandedVersion, printSetCode);
         }
 
         DeckIdentity necromancerUnderdog = upsertDeckIdentity("a7bbd2d0-c81f-56f0-b232-583e1437bc92", "NECROMANCER_UNDERDOG", "Necromancer Underdog Experimental Deck");
         DeckVersion necromancerUnderdogVersion = upsertDeckVersion("1d632c0a-0206-5a29-9b76-e66163f5e72a", "NECROMANCER_UNDERDOG_V1", necromancerUnderdog, "necromancer_underdog_v1", "Power Bulletin plus Head Office with Necromancer and Underdog.");
-        for (String printSetCode : List.of("HERO_ATTACKER_V1_STANDARD", "HERO_HITMAN_V1_STANDARD", "HERO_HEALER_V1_STANDARD", "HERO_SEER_V1_STANDARD", "HERO_GUARD_V1_STANDARD", "VILLAIN_ATTACKER_V1_STANDARD", "VILLAIN_PROVOCATEUR_V1_STANDARD", "VILLAIN_GAMBLER_V1_STANDARD", "VILLAIN_VENGEANCE_V1_STANDARD", "VILLAIN_TACTICIAN_V1_STANDARD", "CIVILIAN_REPORTER_V1_STANDARD", "CIVILIAN_SPY_V1_STANDARD", "VILLAIN_NECROMANCER_V1_STANDARD", "HERO_UNDERDOG_V1_STANDARD")) {
+        for (String printSetCode : List.of("HERO_ATTACKER_V1_STANDARD", "HERO_HITMAN_V1_STANDARD", "HERO_HEALER_V1_STANDARD", "HERO_SEER_V1_STANDARD", "HERO_GUARD_V1_STANDARD", "VILLAIN_BOUNCER_V1_STANDARD", "VILLAIN_ATTACKER_V1_STANDARD", "VILLAIN_PROVOCATEUR_V1_STANDARD", "VILLAIN_GAMBLER_V1_STANDARD", "VILLAIN_VENGEANCE_V1_STANDARD", "VILLAIN_TACTICIAN_V1_STANDARD", "CIVILIAN_REPORTER_V1_STANDARD", "CIVILIAN_SPY_V1_STANDARD", "VILLAIN_NECROMANCER_V1_STANDARD", "HERO_UNDERDOG_V1_STANDARD")) {
             upsertDeckEntry(necromancerUnderdogVersion, printSetCode);
         }
     }
@@ -146,7 +154,7 @@ public class PowerBulletinSeeder implements CommandLineRunner {
     private void seedProducts() {
         Product core = upsertProduct("POWER_BULLETIN_CORE", "Power Bulletin Core", "Core Power Bulletin product.", ProductType.CORE, 10);
         int sortOrder = 1;
-        for (String printSetCode : List.of("HERO_ATTACKER_V1_STANDARD", "HERO_HITMAN_V1_STANDARD", "HERO_HEALER_V1_STANDARD", "HERO_SEER_V1_STANDARD", "HERO_GUARD_V1_STANDARD", "VILLAIN_ATTACKER_V1_STANDARD", "VILLAIN_PROVOCATEUR_V1_STANDARD", "VILLAIN_GAMBLER_V1_STANDARD", "VILLAIN_VENGEANCE_V1_STANDARD", "VILLAIN_TACTICIAN_V1_STANDARD")) {
+        for (String printSetCode : List.of("HERO_ATTACKER_V1_STANDARD", "HERO_HITMAN_V1_STANDARD", "HERO_HEALER_V1_STANDARD", "HERO_SEER_V1_STANDARD", "HERO_GUARD_V1_STANDARD", "VILLAIN_BOUNCER_V1_STANDARD", "VILLAIN_ATTACKER_V1_STANDARD", "VILLAIN_PROVOCATEUR_V1_STANDARD", "VILLAIN_GAMBLER_V1_STANDARD", "VILLAIN_VENGEANCE_V1_STANDARD", "VILLAIN_TACTICIAN_V1_STANDARD")) {
             upsertProductItem(core, printSetCode, sortOrder++);
         }
 
@@ -154,6 +162,14 @@ public class PowerBulletinSeeder implements CommandLineRunner {
         sortOrder = 1;
         for (String printSetCode : List.of("CIVILIAN_REPORTER_V1_STANDARD", "CIVILIAN_SPY_V1_STANDARD")) {
             upsertProductItem(headOffice, printSetCode, sortOrder++);
+        }
+
+        Product bouncerVsMirror = upsertProduct("BOUNCER_VS_MIRROR", "Bouncer vs Mirror", "Reaction-focused expansion with Bouncer and Mirror.", ProductType.EXPANSION, 30);
+        bouncerVsMirror.setReleaseStatus(ProductReleaseStatus.DRAFT);
+        bouncerVsMirror = productRepository.save(bouncerVsMirror);
+        sortOrder = 1;
+        for (String printSetCode : List.of("VILLAIN_BOUNCER_V2_STANDARD", "HERO_MIRROR_V2_STANDARD")) {
+            upsertProductItem(bouncerVsMirror, printSetCode, sortOrder++);
         }
     }
 
@@ -191,6 +207,10 @@ public class PowerBulletinSeeder implements CommandLineRunner {
     }
 
     private void upsertCard(String identityId, String identityCode, String name, String characterName, Faction faction, String versionId, CardType cardType, String effectText, String printSetId, List<Integer> powers) {
+        upsertCard(identityId, identityCode, name, characterName, faction, versionId, cardType, effectText, printSetId, powers, "V1");
+    }
+
+    private void upsertCard(String identityId, String identityCode, String name, String characterName, Faction faction, String versionId, CardType cardType, String effectText, String printSetId, List<Integer> powers, String versionSuffix) {
         CardIdentity identity = cardIdentityRepository.findByCode(identityCode).orElseGet(CardIdentity::new);
         identity.setCode(identityCode);
         identity.setName(name);
@@ -199,19 +219,20 @@ public class PowerBulletinSeeder implements CommandLineRunner {
         identity.setStatus("Active");
         identity = cardIdentityRepository.save(identity);
 
-        EffectDefinition effect = effectRepository.findByCode(identityCode + "_V1").orElseThrow();
-        CardVersion version = cardVersionRepository.findByCode(identityCode + "_V1").orElseGet(CardVersion::new);
-        version.setCode(identityCode + "_V1");
+        String versionCode = identityCode + "_" + versionSuffix;
+        EffectDefinition effect = effectRepository.findByCode(versionCode).orElseThrow();
+        CardVersion version = cardVersionRepository.findByCode(versionCode).orElseGet(CardVersion::new);
+        version.setCode(versionCode);
         version.setCardIdentity(identity);
         version.setEffectDefinition(effect);
-        version.setVersionName("v1");
+        version.setVersionName(versionSuffix.toLowerCase());
         version.setCardType(cardType);
         version.setEffectText(effectText);
         version.setStatus("Active");
         version = cardVersionRepository.save(version);
 
-        CardPrintSet printSet = cardPrintSetRepository.findByCode(identityCode + "_V1_STANDARD").orElseGet(CardPrintSet::new);
-        printSet.setCode(identityCode + "_V1_STANDARD");
+        CardPrintSet printSet = cardPrintSetRepository.findByCode(versionCode + "_STANDARD").orElseGet(CardPrintSet::new);
+        printSet.setCode(versionCode + "_STANDARD");
         printSet.setCardVersion(version);
         printSet.setStatus("Active");
         if (!printSet.getPowers().stream().map(power -> power.getPower()).toList().equals(powers)) {
