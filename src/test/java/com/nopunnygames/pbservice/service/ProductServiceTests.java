@@ -143,6 +143,42 @@ class ProductServiceTests {
     }
 
     @Test
+    void rejectsDuplicateDeckVersionCodeOnCreate() {
+        DeckVersionDto existing = createDeckVersion("DUPLICATE_DECK_VERSION");
+        DeckVersionDto duplicate = new DeckVersionDto();
+        duplicate.setDeckIdentityId(existing.getDeckIdentityId());
+        duplicate.setCode(existing.getCode());
+        duplicate.setVersionName("v2");
+        duplicate.setStatus("Active");
+
+        assertThatThrownBy(() -> deckVersionService.create(duplicate, null))
+                .isInstanceOf(ValidationErrorException.class)
+                .hasMessageContaining("Creation Failed");
+    }
+
+    @Test
+    void allowsDeckVersionUpdateWithoutChangingCode() {
+        DeckVersionDto version = createDeckVersion("UNCHANGED_DECK_VERSION");
+        version.setVersionName("v2");
+
+        DeckVersionDto updated = deckVersionService.update(version, version.getId(), null);
+
+        assertThat(updated.getCode()).isEqualTo(version.getCode());
+        assertThat(updated.getVersionName()).isEqualTo("v2");
+    }
+
+    @Test
+    void rejectsDuplicateDeckVersionCodeOnUpdate() {
+        DeckVersionDto first = createDeckVersion("UPDATE_DUPLICATE_FIRST");
+        DeckVersionDto second = createDeckVersion("UPDATE_DUPLICATE_SECOND");
+        second.setCode(first.getCode());
+
+        assertThatThrownBy(() -> deckVersionService.update(second, second.getId(), null))
+                .isInstanceOf(ValidationErrorException.class)
+                .hasMessageContaining("Update Failed");
+    }
+
+    @Test
     void applyingProductCreatesDeckEntries() {
         ProductDto product = productService.create(product("CORE_APPLY_CREATE", "Core Apply Create"), null);
         CardPrintSetDto first = createPrintSet("APPLY_CREATE_ONE");

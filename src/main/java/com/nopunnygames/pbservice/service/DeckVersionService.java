@@ -53,12 +53,12 @@ public class DeckVersionService extends MasterService<DeckVersion, UUID, DeckVer
 
     @Override
     protected List<ValidationError> createEntityValidation(DeckVersionDto dto) {
-        return validate(dto);
+        return validate(dto, null);
     }
 
     @Override
     protected List<ValidationError> updateEntityValidation(DeckVersionDto dto) {
-        return validate(dto);
+        return validate(dto, dto.getId());
     }
 
     @Override
@@ -78,7 +78,7 @@ public class DeckVersionService extends MasterService<DeckVersion, UUID, DeckVer
     @Override
     @Transactional
     public DeckVersionDto update(DeckVersionDto dto, UUID id, AuthUser user) {
-        List<ValidationError> errors = updateEntityValidation(dto);
+        List<ValidationError> errors = validate(dto, id);
         if (!errors.isEmpty()) throw new ValidationErrorException("Update Failed", errors);
 
         DeckVersion entity = repository.findById(id)
@@ -110,10 +110,16 @@ public class DeckVersionService extends MasterService<DeckVersion, UUID, DeckVer
         entity.setNotes(dto.getNotes());
     }
 
-    private List<ValidationError> validate(DeckVersionDto dto) {
+    private List<ValidationError> validate(DeckVersionDto dto, UUID currentId) {
         List<ValidationError> errors = new ArrayList<>();
         if (dto.getDeckIdentityId() == null) errors.add(new ValidationError("deckIdentityId", "Deck identity is required."));
-        if (isBlank(dto.getCode())) errors.add(new ValidationError("code", "Code is required."));
+        if (isBlank(dto.getCode())) {
+            errors.add(new ValidationError("code", "Code is required."));
+        } else {
+            repository.findByCode(dto.getCode().trim())
+                    .filter(existing -> currentId == null || !existing.getId().equals(currentId))
+                    .ifPresent(existing -> errors.add(new ValidationError("code", "Code is already used by another deck version.")));
+        }
         if (isBlank(dto.getVersionName())) errors.add(new ValidationError("versionName", "Version name is required."));
         return errors;
     }
