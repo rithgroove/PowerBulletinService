@@ -73,6 +73,7 @@ public class ProductItem extends MasterEntity<ProductItem, ProductItemDto> {
                 dto.setEffectText(version.getEffectText());
                 CardIdentity identity = version.getCardIdentity();
                 if (identity != null) {
+                    dto.setCardIdentityId(identity.getId());
                     dto.setCardIdentityName(identity.getName());
                     dto.setCharacterName(identity.getCharacterName());
                     dto.setFaction(identity.getFaction());

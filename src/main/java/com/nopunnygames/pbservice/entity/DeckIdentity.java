@@ -34,6 +34,9 @@ public class DeckIdentity extends MasterEntity<DeckIdentity, DeckIdentityDto> {
     @Column(columnDefinition = "TEXT")
     private String notes;
 
+    @Column(name = "display_order", nullable = false)
+    private int displayOrder = 0;
+
     @OneToMany(mappedBy = "deckIdentity", cascade = CascadeType.ALL)
     private List<DeckVersion> versions = new ArrayList<>();
 

@@ -51,6 +51,7 @@ public class PowerBulletinCmsQueryService {
             Map.entry("code", "LOWER(di.code)"),
             Map.entry("name", "LOWER(di.name)"),
             Map.entry("versions", "COUNT(dv.id)"),
+            Map.entry("displayOrder", "di.display_order"),
             Map.entry("status", "LOWER(di.status)")
     );
     private static final Map<String, String> DECK_VERSION_SORT_COLUMNS = Map.ofEntries(
@@ -85,12 +86,13 @@ public class PowerBulletinCmsQueryService {
             Map.entry("created_at", "sr.created_at")
     );
     private static final Map<String, String> GROUPED_RESULT_SORT_COLUMNS = Map.ofEntries(
-            Map.entry("deck", "LOWER(srg.deck_name)"),
+            Map.entry("deck", "LOWER(COALESCE(di.name, srg.deck_name))"),
             Map.entry("version", "LOWER(srg.version_name)"),
             Map.entry("seed", "srg.rng_seed"),
             Map.entry("iterations", "srg.requested_iterations_per_player_count"),
             Map.entry("subruns", "COUNT(srgm.id)"),
             Map.entry("games", "COALESCE(SUM(srgm.total_games), 0)"),
+            Map.entry("approved", "srg.approved_at"),
             Map.entry("created_at", "srg.created_at")
     );
     private static final Set<String> OPTIONAL_METRIC_TABLES = Set.of(
@@ -317,6 +319,8 @@ public class PowerBulletinCmsQueryService {
                     di.code,
                     di.name,
                     di.notes,
+                    di.display_order,
+                    di.display_order AS "displayOrder",
                     di.status,
                     COUNT(dv.id) AS version_count
                 FROM deck_identities di
@@ -324,7 +328,7 @@ public class PowerBulletinCmsQueryService {
                 %s
                 GROUP BY di.id
                 ORDER BY %s
-                """.formatted(where, orderBy(DECK_SORT_COLUMNS, sortBy, direction, "code", "LOWER(di.name) ASC"));
+                """.formatted(where, orderBy(DECK_SORT_COLUMNS, sortBy, direction, "displayOrder", "di.display_order ASC, LOWER(di.name) ASC"));
         return jdbcTemplate.queryForList(sql, params.toArray());
     }
 
@@ -341,6 +345,8 @@ public class PowerBulletinCmsQueryService {
                     di.code,
                     di.name,
                     di.notes,
+                    di.display_order,
+                    di.display_order AS "displayOrder",
                     di.status
                 FROM deck_identities di
                 WHERE di.id = ? AND di.deleted_at IS NULL
@@ -459,6 +465,7 @@ public class PowerBulletinCmsQueryService {
                     ci.id AS card_identity_id,
                     ci.id AS "cardIdentityId",
                     cps.code AS print_set_code,
+                    ci.character_name,
                     ci.name AS card_name,
                     cv.version_name,
                     ci.faction,
@@ -471,7 +478,7 @@ public class PowerBulletinCmsQueryService {
                 JOIN card_identities ci ON ci.id = cv.card_identity_id AND ci.deleted_at IS NULL
                 LEFT JOIN card_print_set_powers cpsp ON cpsp.card_print_set_id = cps.id
                 %s
-                GROUP BY de.id, cps.id, ci.id, cv.id
+                GROUP BY de.id, cps.id, ci.id, ci.character_name, cv.id
                 ORDER BY %s
                 """.formatted(where, orderBy(DECK_ENTRY_SORT_COLUMNS, sortBy, direction, "faction", "LOWER(ci.name) ASC, LOWER(cps.code) ASC"));
         return jdbcTemplate.queryForList(sql, params.toArray());
@@ -604,6 +611,24 @@ public class PowerBulletinCmsQueryService {
     }
 
     /**
+     * Marks one grouped simulation run as checked and approved.
+     *
+     * @param groupId grouped run UUID
+     * @return updated grouped run row
+     */
+    public Map<String, Object> approveSimulationRunGroup(UUID groupId) {
+        if (!tableExists("simulation_run_groups")) {
+            return Map.of();
+        }
+        jdbcTemplate.update("""
+                UPDATE simulation_run_groups
+                SET approved_at = COALESCE(approved_at, CURRENT_TIMESTAMP)
+                WHERE id = ?
+                """, groupId);
+        return simulationRunGroup(groupId);
+    }
+
+    /**
      * Returns one simulation run and its metric tables.
      *
      * @param runId simulation run UUID
@@ -698,13 +723,13 @@ public class PowerBulletinCmsQueryService {
      *
      * @return grouped run rows
      */
-    public List<Map<String, Object>> listSimulationRunGroups(String sortBy, String direction, String deckIdentityId, String search) {
+    public List<Map<String, Object>> listSimulationRunGroups(String sortBy, String direction, String deckIdentityId, String deckVersionId, String search) {
         if (!tableExists("simulation_run_groups")) {
             return List.of();
         }
         List<Object> params = new ArrayList<>();
         StringBuilder where = new StringBuilder("WHERE 1 = 1");
-        addSearch(where, params, search, "srg.deck_code", "srg.deck_name", "srg.version_name");
+        addSearch(where, params, search, "srg.deck_code", "COALESCE(di.name, srg.deck_name)", "srg.version_name");
         if (deckIdentityId != null && !deckIdentityId.isBlank()) {
             where.append("""
                      AND EXISTS (
@@ -712,20 +737,46 @@ public class PowerBulletinCmsQueryService {
                         FROM deck_identities di
                         WHERE di.id::text = ?
                             AND di.deleted_at IS NULL
-                            AND di.code = srg.deck_code
+                            AND (
+                                di.id = srg.deck_identity_id
+                                OR (
+                                    srg.deck_identity_id IS NULL
+                                    AND di.code = srg.deck_code
+                                )
+                            )
                     )
                     """);
             params.add(deckIdentityId);
         }
+        if (deckVersionId != null && !deckVersionId.isBlank()) {
+            where.append("""
+                     AND EXISTS (
+                        SELECT 1
+                        FROM simulation_run_group_members filter_srgm
+                        JOIN simulation_runs filter_sr ON filter_sr.id = filter_srgm.run_id
+                        WHERE filter_srgm.run_group_id = srg.id
+                            AND filter_sr.deck_version_id::text = ?
+                    )
+                    """);
+            params.add(deckVersionId);
+        }
         return jdbcTemplate.queryForList("""
                 SELECT
                     srg.*,
+                    COALESCE(di.name, srg.deck_name) AS deck_identity_name,
                     COUNT(srgm.id) AS subrun_count,
                     COALESCE(SUM(srgm.total_games), 0) AS total_games_all_subruns
                 FROM simulation_run_groups srg
+                LEFT JOIN deck_identities di ON (
+                    di.id = srg.deck_identity_id
+                    OR (
+                        srg.deck_identity_id IS NULL
+                        AND di.code = srg.deck_code
+                    )
+                ) AND di.deleted_at IS NULL
                 LEFT JOIN simulation_run_group_members srgm ON srgm.run_group_id = srg.id
                 %s
-                GROUP BY srg.id
+                GROUP BY srg.id, di.name
                 ORDER BY %s
                 """.formatted(where, orderBy(GROUPED_RESULT_SORT_COLUMNS, sortBy, direction, "created_at", "srg.run_group_code DESC")), params.toArray());
     }
@@ -742,7 +793,13 @@ public class PowerBulletinCmsQueryService {
         List<Map<String, Object>> decks = jdbcTemplate.queryForList("""
                 SELECT DISTINCT di.id::text AS value, di.name AS label
                 FROM simulation_run_groups srg
-                JOIN deck_identities di ON di.code = srg.deck_code AND di.deleted_at IS NULL
+                JOIN deck_identities di ON (
+                    di.id = srg.deck_identity_id
+                    OR (
+                        srg.deck_identity_id IS NULL
+                        AND di.code = srg.deck_code
+                    )
+                ) AND di.deleted_at IS NULL
                 ORDER BY di.name ASC
                 """);
         return Map.of("decks", decks);
@@ -776,6 +833,8 @@ public class PowerBulletinCmsQueryService {
         return jdbcTemplate.queryForList("""
                 SELECT
                     srgm.*,
+                    sr.deck_version_id,
+                    sr.deck_version_id AS "deckVersionId",
                     rms.deck_out_rate,
                     rms.last_man_standing_rate,
                     rms.elimination_rate,
@@ -791,6 +850,7 @@ public class PowerBulletinCmsQueryService {
                     arms.memorability_score,
                     arms.pressure_fairness_score
                 FROM simulation_run_group_members srgm
+                LEFT JOIN simulation_runs sr ON sr.id = srgm.run_id
                 LEFT JOIN run_metric_summaries rms ON rms.run_id = srgm.run_id
                 LEFT JOIN advanced_run_metric_summaries arms ON arms.run_id = srgm.run_id
                 WHERE srgm.run_group_id = ?

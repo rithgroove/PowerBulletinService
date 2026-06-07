@@ -7,6 +7,7 @@ import com.nopunnygames.tanuki.core.response.PagedResponse;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -285,6 +286,7 @@ public class CmsQueryController {
             @RequestParam(name = "sort_by", defaultValue = "created_at") String sortBy,
             @RequestParam(name = "sort_direction", defaultValue = "desc") String sortDirection,
             @RequestParam(defaultValue = "") String deck,
+            @RequestParam(defaultValue = "") String deckVersionId,
             @RequestParam(defaultValue = "") String search,
             @RequestParam(defaultValue = "1") int page,
             @RequestParam(defaultValue = "10") int limit
@@ -293,6 +295,7 @@ public class CmsQueryController {
                 sortBy,
                 sortDirection,
                 deck,
+                deckVersionId,
                 search
         ), page, limit)));
     }
@@ -306,6 +309,17 @@ public class CmsQueryController {
     @DeleteMapping("/simulation-run-groups/{groupId}")
     public ResponseEntity<ApiResponse<Map<String, Object>>> deleteSimulationRunGroup(@PathVariable UUID groupId) {
         return ResponseEntity.ok(new ApiResponse<>(200, queryService.deleteSimulationRunGroup(groupId)));
+    }
+
+    /**
+     * Marks one grouped simulation run as checked and approved.
+     *
+     * @param groupId grouped run UUID
+     * @return updated grouped run row
+     */
+    @PatchMapping("/simulation-run-groups/{groupId}/approve")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> approveSimulationRunGroup(@PathVariable UUID groupId) {
+        return ResponseEntity.ok(new ApiResponse<>(200, queryService.approveSimulationRunGroup(groupId)));
     }
 
     /**

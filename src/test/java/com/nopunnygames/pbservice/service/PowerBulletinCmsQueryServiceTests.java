@@ -190,8 +190,8 @@ class PowerBulletinCmsQueryServiceTests {
         UUID entryId = UUID.randomUUID();
         createDeckEntryTables();
         jdbcTemplate.update("""
-                INSERT INTO card_identities (id, name, faction, deleted_at)
-                VALUES (?, 'ATTACKER', 'HERO', null)
+                INSERT INTO card_identities (id, name, character_name, faction, deleted_at)
+                VALUES (?, 'ATTACKER', 'Aurora', 'HERO', null)
                 """, cardIdentityId);
         jdbcTemplate.update("""
                 INSERT INTO card_versions (id, card_identity_id, version_name, card_type, deleted_at)
@@ -218,7 +218,8 @@ class PowerBulletinCmsQueryServiceTests {
         assertThat(entries).hasSize(1);
         assertThat(entries.getFirst())
                 .containsEntry("card_identity_id", cardIdentityId)
-                .containsEntry("cardIdentityId", cardIdentityId);
+                .containsEntry("cardIdentityId", cardIdentityId)
+                .containsEntry("character_name", "Aurora");
     }
 
     @Test
@@ -241,12 +242,25 @@ class PowerBulletinCmsQueryServiceTests {
                 VALUES (?, ?, '{"cross_player_summary":{"deck_out_rate_range":0.2}}', ?)
                 """, UUID.randomUUID(), groupId, Timestamp.from(Instant.parse("2026-05-31T00:00:00Z")));
 
-        assertThat(queryService.listSimulationRunGroups("created_at", "desc", "", "")).hasSize(1);
+        List<Map<String, Object>> groups = queryService.listSimulationRunGroups("created_at", "desc", "", "", "");
+        assertThat(groups).hasSize(1);
+        assertThat(groups.getFirst()).containsEntry("deck_identity_name", "Test Deck");
+        String deckVersionId = String.valueOf(jdbcTemplate.queryForObject(
+                "SELECT deck_version_id FROM simulation_runs WHERE id = ?",
+                UUID.class,
+                runId
+        ));
+        assertThat(queryService.listSimulationRunGroups("created_at", "desc", "", deckVersionId, "")).hasSize(1);
+        assertThat(queryService.listSimulationRunGroups("created_at", "desc", "", UUID.randomUUID().toString(), "")).isEmpty();
         Map<String, Object> detail = queryService.simulationRunGroupDetail(groupId);
         assertThat(map(detail, "group")).containsEntry("run_group_code", "GROUP_A");
         assertThat((List<?>) detail.get("subruns")).hasSize(1);
         assertThat(map(detail, "summary")).containsKey("summary_json");
         assertThat(queryService.simulationRunDetail(runId).get("runGroup")).isInstanceOf(Map.class);
+
+        Map<String, Object> approved = queryService.approveSimulationRunGroup(groupId);
+        assertThat(approved.get("approved_at")).isNotNull();
+        assertThat(queryService.listSimulationRunGroups("approved", "desc", "", "", "").getFirst().get("approved_at")).isNotNull();
     }
 
     @Test
@@ -281,7 +295,9 @@ class PowerBulletinCmsQueryServiceTests {
         jdbcTemplate.execute("""
                 CREATE TABLE deck_identities (
                     id UUID PRIMARY KEY,
-                    name TEXT NOT NULL
+                    code TEXT NOT NULL,
+                    name TEXT NOT NULL,
+                    deleted_at TIMESTAMP
                 )
                 """);
         jdbcTemplate.execute("""
@@ -337,7 +353,7 @@ class PowerBulletinCmsQueryServiceTests {
     private void insertBaseRun() {
         UUID deckIdentityId = UUID.randomUUID();
         UUID deckVersionId = UUID.randomUUID();
-        jdbcTemplate.update("INSERT INTO deck_identities (id, name) VALUES (?, 'Test Deck')", deckIdentityId);
+        jdbcTemplate.update("INSERT INTO deck_identities (id, code, name, deleted_at) VALUES (?, 'TEST_DECK_V1', 'Test Deck', null)", deckIdentityId);
         jdbcTemplate.update("""
                 INSERT INTO deck_versions (id, deck_identity_id, code, version_name)
                 VALUES (?, ?, 'TEST_DECK_V1', 'v1')
@@ -412,6 +428,7 @@ class PowerBulletinCmsQueryServiceTests {
                     id UUID PRIMARY KEY,
                     run_group_code TEXT,
                     run_group_name TEXT,
+                    deck_identity_id UUID,
                     deck_code TEXT,
                     deck_name TEXT,
                     version_name TEXT,
@@ -419,7 +436,8 @@ class PowerBulletinCmsQueryServiceTests {
                     requested_iterations_per_player_count INTEGER,
                     player_counts TEXT,
                     created_at TIMESTAMP,
-                    notes TEXT
+                    notes TEXT,
+                    approved_at TIMESTAMP
                 )
                 """);
         jdbcTemplate.execute("""
@@ -450,6 +468,7 @@ class PowerBulletinCmsQueryServiceTests {
                 CREATE TABLE card_identities (
                     id UUID PRIMARY KEY,
                     name TEXT NOT NULL,
+                    character_name TEXT NOT NULL,
                     faction TEXT NOT NULL,
                     deleted_at TIMESTAMP
                 )

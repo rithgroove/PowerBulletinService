@@ -16,6 +16,7 @@ public class ProductItemDto {
     private UUID id;
     private UUID productId;
     private UUID cardPrintSetId;
+    private UUID cardIdentityId;
     private int quantity = 1;
     private int sortOrder = 0;
     private String status = "Active";

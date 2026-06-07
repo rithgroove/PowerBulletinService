@@ -14,6 +14,7 @@ public class DeckIdentityDto {
     private String code;
     private String name;
     private String notes;
+    private int displayOrder = 0;
     private String status = "Active";
     private List<DeckVersionDto> versions;
 
