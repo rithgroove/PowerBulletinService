@@ -1,14 +1,22 @@
 package com.nopunnygames.pbservice.controller;
 
+import com.nopunnygames.pbservice.dto.SimulationRunGroupQueueRequestDto;
 import com.nopunnygames.pbservice.service.PowerBulletinCmsQueryService;
+import com.nopunnygames.tanuki.core.dto.AuthUser;
+import com.nopunnygames.tanuki.core.exception.ValidationErrorException;
+import com.nopunnygames.tanuki.core.response.ApiErrorResponse;
 import com.nopunnygames.tanuki.core.response.ApiResponse;
 import com.nopunnygames.tanuki.core.response.PageMeta;
 import com.nopunnygames.tanuki.core.response.PagedResponse;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -114,6 +122,16 @@ public class CmsQueryController {
             @RequestParam(defaultValue = "") String cardType
     ) {
         return ResponseEntity.ok(new ApiResponse<>(200, queryService.listCardPrintSetOptions(search, faction, cardType)));
+    }
+
+    /**
+     * Lists deck version options for queued simulation forms.
+     *
+     * @return deck version options
+     */
+    @GetMapping("/deck-versions/options")
+    public ResponseEntity<ApiResponse<List<Map<String, Object>>>> deckVersionOptions() {
+        return ResponseEntity.ok(new ApiResponse<>(200, queryService.listDeckVersionOptions()));
     }
 
     /**
@@ -261,7 +279,14 @@ public class CmsQueryController {
      * @return deletion summary
      */
     @DeleteMapping("/simulation-runs/{runId}")
-    public ResponseEntity<ApiResponse<Map<String, Object>>> deleteSimulationRun(@PathVariable UUID runId) {
+    public ResponseEntity<ApiResponse<Map<String, Object>>> deleteSimulationRun(
+            @PathVariable UUID runId,
+            Authentication authentication
+    ) {
+        ResponseEntity<ApiResponse<Map<String, Object>>> permissionCheck = checkPermission(authenticatedUser(authentication), "PB_RECORDS_DELETE");
+        if (permissionCheck != null) {
+            return permissionCheck;
+        }
         return ResponseEntity.ok(new ApiResponse<>(200, queryService.deleteSimulationRun(runId)));
     }
 
@@ -307,7 +332,14 @@ public class CmsQueryController {
      * @return deletion summary
      */
     @DeleteMapping("/simulation-run-groups/{groupId}")
-    public ResponseEntity<ApiResponse<Map<String, Object>>> deleteSimulationRunGroup(@PathVariable UUID groupId) {
+    public ResponseEntity<ApiResponse<Map<String, Object>>> deleteSimulationRunGroup(
+            @PathVariable UUID groupId,
+            Authentication authentication
+    ) {
+        ResponseEntity<ApiResponse<Map<String, Object>>> permissionCheck = checkPermission(authenticatedUser(authentication), "PB_RECORDS_DELETE");
+        if (permissionCheck != null) {
+            return permissionCheck;
+        }
         return ResponseEntity.ok(new ApiResponse<>(200, queryService.deleteSimulationRunGroup(groupId)));
     }
 
@@ -318,8 +350,40 @@ public class CmsQueryController {
      * @return updated grouped run row
      */
     @PatchMapping("/simulation-run-groups/{groupId}/approve")
-    public ResponseEntity<ApiResponse<Map<String, Object>>> approveSimulationRunGroup(@PathVariable UUID groupId) {
+    public ResponseEntity<ApiResponse<Map<String, Object>>> approveSimulationRunGroup(
+            @PathVariable UUID groupId,
+            Authentication authentication
+    ) {
+        ResponseEntity<ApiResponse<Map<String, Object>>> permissionCheck = checkPermission(authenticatedUser(authentication), "PB_RECORDS_UPDATE");
+        if (permissionCheck != null) {
+            return permissionCheck;
+        }
         return ResponseEntity.ok(new ApiResponse<>(200, queryService.approveSimulationRunGroup(groupId)));
+    }
+
+    /**
+     * Queues one grouped simulation run for an external simulator worker.
+     *
+     * @param request queue request
+     * @param authentication Spring Security authentication
+     * @return created grouped run row
+     */
+    @PostMapping("/simulation-run-groups")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> createSimulationRunGroup(
+            @RequestBody SimulationRunGroupQueueRequestDto request,
+            Authentication authentication
+    ) {
+        AuthUser user = authenticatedUser(authentication);
+        ResponseEntity<ApiResponse<Map<String, Object>>> permissionCheck = checkPermission(user, "PB_RECORDS_CREATE");
+        if (permissionCheck != null) {
+            return permissionCheck;
+        }
+        try {
+            return ResponseEntity.ok(new ApiResponse<>(200, queryService.createQueuedSimulationRunGroup(request)));
+        } catch (ValidationErrorException exception) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(new ApiErrorResponse<>(400, Map.of(), exception.getMessage(), exception.errors));
+        }
     }
 
     /**
@@ -353,6 +417,29 @@ public class CmsQueryController {
     @GetMapping("/simulation-run-groups/{groupId}/subruns")
     public ResponseEntity<ApiResponse<List<Map<String, Object>>>> simulationRunGroupSubruns(@PathVariable UUID groupId) {
         return ResponseEntity.ok(new ApiResponse<>(200, queryService.simulationRunGroupSubruns(groupId)));
+    }
+
+    private AuthUser authenticatedUser(Authentication authentication) {
+        if (authentication == null || !(authentication.getPrincipal() instanceof AuthUser user)) {
+            return null;
+        }
+        return user;
+    }
+
+    private <T> ResponseEntity<ApiResponse<T>> checkPermission(AuthUser user, String requiredPermission) {
+        if (user == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body(new ApiErrorResponse<>(401, null, "Authentication required", null));
+        }
+        if (user.acls() == null || user.acls().isEmpty()) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body(new ApiErrorResponse<>(403, null, "No permissions found", null));
+        }
+        if (!user.acls().contains(requiredPermission)) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body(new ApiErrorResponse<>(403, null, "Insufficient permissions for: " + requiredPermission, null));
+        }
+        return null;
     }
 
     private PagedResponse<Map<String, Object>> paged(List<Map<String, Object>> rows, int page, int limit) {

@@ -2,6 +2,9 @@ package com.nopunnygames.pbservice.service;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.nopunnygames.pbservice.dto.SimulationRunGroupQueueRequestDto;
+import com.nopunnygames.tanuki.core.exception.ValidationError;
+import com.nopunnygames.tanuki.core.exception.ValidationErrorException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -11,6 +14,8 @@ import java.sql.DatabaseMetaData;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.nio.charset.StandardCharsets;
+import java.time.OffsetDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -92,6 +97,7 @@ public class PowerBulletinCmsQueryService {
             Map.entry("iterations", "srg.requested_iterations_per_player_count"),
             Map.entry("subruns", "COUNT(srgm.id)"),
             Map.entry("games", "COALESCE(SUM(srgm.total_games), 0)"),
+            Map.entry("queue_status", "LOWER(srg.queue_status)"),
             Map.entry("approved", "srg.approved_at"),
             Map.entry("created_at", "srg.created_at")
     );
@@ -383,6 +389,24 @@ public class PowerBulletinCmsQueryService {
                 ORDER BY %s
                 """.formatted(where, orderBy(DECK_VERSION_SORT_COLUMNS, sortBy, direction, "version", "LOWER(dv.code) ASC"));
         return jdbcTemplate.queryForList(sql, params.toArray());
+    }
+
+    /**
+     * Lists deck versions that can be used for queued grouped simulations.
+     *
+     * @return deck version option rows
+     */
+    public List<Map<String, Object>> listDeckVersionOptions() {
+        return jdbcTemplate.queryForList("""
+                SELECT
+                    dv.id::text AS value,
+                    CONCAT(di.name, ' / ', dv.version_name, ' (', dv.code, ')') AS label
+                FROM deck_versions dv
+                JOIN deck_identities di ON di.id = dv.deck_identity_id AND di.deleted_at IS NULL
+                WHERE dv.deleted_at IS NULL
+                  AND dv.status = 'Active'
+                ORDER BY di.display_order ASC, LOWER(di.name) ASC, LOWER(dv.version_name) ASC
+                """);
     }
 
     /**
@@ -749,16 +773,33 @@ public class PowerBulletinCmsQueryService {
             params.add(deckIdentityId);
         }
         if (deckVersionId != null && !deckVersionId.isBlank()) {
-            where.append("""
-                     AND EXISTS (
-                        SELECT 1
-                        FROM simulation_run_group_members filter_srgm
-                        JOIN simulation_runs filter_sr ON filter_sr.id = filter_srgm.run_id
-                        WHERE filter_srgm.run_group_id = srg.id
-                            AND filter_sr.deck_version_id::text = ?
-                    )
-                    """);
-            params.add(deckVersionId);
+            if (columnExists("simulation_run_groups", "deck_version_id")) {
+                where.append("""
+                         AND (
+                            srg.deck_version_id::text = ?
+                            OR EXISTS (
+                                SELECT 1
+                                FROM simulation_run_group_members filter_srgm
+                                JOIN simulation_runs filter_sr ON filter_sr.id = filter_srgm.run_id
+                                WHERE filter_srgm.run_group_id = srg.id
+                                    AND filter_sr.deck_version_id::text = ?
+                            )
+                        )
+                        """);
+                params.add(deckVersionId);
+                params.add(deckVersionId);
+            } else {
+                where.append("""
+                         AND EXISTS (
+                            SELECT 1
+                            FROM simulation_run_group_members filter_srgm
+                            JOIN simulation_runs filter_sr ON filter_sr.id = filter_srgm.run_id
+                            WHERE filter_srgm.run_group_id = srg.id
+                                AND filter_sr.deck_version_id::text = ?
+                        )
+                        """);
+                params.add(deckVersionId);
+            }
         }
         return jdbcTemplate.queryForList("""
                 SELECT
@@ -873,6 +914,127 @@ public class PowerBulletinCmsQueryService {
                 FROM simulation_run_group_summaries
                 WHERE run_group_id = ?
                 """, groupId);
+    }
+
+    /**
+     * Creates a pending grouped simulation run for an external simulator worker.
+     *
+     * @param request queue request
+     * @return created group row
+     */
+    @Transactional
+    public Map<String, Object> createQueuedSimulationRunGroup(SimulationRunGroupQueueRequestDto request) {
+        List<ValidationError> errors = validateQueueRequest(request);
+        if (!errors.isEmpty()) {
+            throw new ValidationErrorException("Invalid grouped simulation request", errors);
+        }
+
+        Map<String, Object> deckVersion = jdbcTemplate.queryForMap("""
+                SELECT
+                    dv.id AS deck_version_id,
+                    dv.code AS deck_version_code,
+                    dv.version_name,
+                    di.id AS deck_identity_id,
+                    di.code AS deck_identity_code,
+                    di.name AS deck_identity_name
+                FROM deck_versions dv
+                JOIN deck_identities di ON di.id = dv.deck_identity_id AND di.deleted_at IS NULL
+                WHERE dv.id = ?
+                  AND dv.deleted_at IS NULL
+                """, request.getDeckVersionId());
+        UUID groupId = UUID.randomUUID();
+        OffsetDateTime queuedAt = OffsetDateTime.now();
+        String deckVersionCode = String.valueOf(deckVersion.get("deck_version_code"));
+        String groupCode = normalizedQueueCode(request.getRunGroupCode(), deckVersionCode, request.getRngSeed(), queuedAt);
+        String groupName = firstNonBlank(
+                request.getRunGroupName(),
+                "Queued " + deckVersion.get("deck_identity_name") + " / " + deckVersion.get("version_name") + " seed " + request.getRngSeed()
+        );
+        String notes = firstNonBlank(request.getNotes(), "Queued from Power Bulletin admin.");
+
+        jdbcTemplate.update("""
+                INSERT INTO simulation_run_groups (
+                    id,
+                    run_group_code,
+                    run_group_name,
+                    deck_identity_id,
+                    deck_version_id,
+                    deck_code,
+                    deck_name,
+                    version_name,
+                    rng_seed,
+                    requested_iterations_per_player_count,
+                    player_counts,
+                    created_at,
+                    notes,
+                    queue_status,
+                    queued_at
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?::jsonb, ?, ?, 'PENDING', ?)
+                """,
+                groupId,
+                groupCode,
+                groupName,
+                deckVersion.get("deck_identity_id"),
+                deckVersion.get("deck_version_id"),
+                deckVersion.get("deck_version_code"),
+                deckVersion.get("deck_identity_name"),
+                deckVersion.get("version_name"),
+                request.getRngSeed(),
+                request.getIterationsPerPlayerCount(),
+                toJson(request.getPlayerCounts()),
+                queuedAt,
+                notes,
+                queuedAt
+        );
+        return simulationRunGroup(groupId);
+    }
+
+    private List<ValidationError> validateQueueRequest(SimulationRunGroupQueueRequestDto request) {
+        List<ValidationError> errors = new ArrayList<>();
+        if (request.getDeckVersionId() == null) {
+            errors.add(new ValidationError("deckVersionId", "Deck version is required."));
+        }
+        if (request.getRngSeed() == null) {
+            errors.add(new ValidationError("rngSeed", "Seed is required."));
+        }
+        if (request.getIterationsPerPlayerCount() == null || request.getIterationsPerPlayerCount() < 1) {
+            errors.add(new ValidationError("iterationsPerPlayerCount", "Iterations per player count must be at least 1."));
+        }
+        if (request.getPlayerCounts() == null || request.getPlayerCounts().isEmpty()) {
+            errors.add(new ValidationError("playerCounts", "At least one player count is required."));
+        } else {
+            List<Integer> invalidCounts = request.getPlayerCounts().stream()
+                    .filter(count -> count == null || count < 2 || count > 4)
+                    .toList();
+            if (!invalidCounts.isEmpty()) {
+                errors.add(new ValidationError("playerCounts", "Player counts must be 2, 3, or 4."));
+            }
+        }
+        return errors;
+    }
+
+    private String normalizedQueueCode(String requestedCode, String deckVersionCode, long seed, OffsetDateTime queuedAt) {
+        String code = firstNonBlank(requestedCode, "");
+        if (!code.isBlank()) {
+            return code.trim().toUpperCase(Locale.ROOT).replaceAll("[^A-Z0-9_]+", "_");
+        }
+        String timestamp = queuedAt.format(DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss_SSS"));
+        return "QUEUED_" + deckVersionCode.toUpperCase(Locale.ROOT).replaceAll("[^A-Z0-9_]+", "_")
+                + "_SEED_" + seed
+                + "_" + timestamp;
+    }
+
+    private String firstNonBlank(String value, String fallback) {
+        return value == null || value.isBlank() ? fallback : value.trim();
+    }
+
+    private String toJson(Object value) {
+        try {
+            return OBJECT_MAPPER.writeValueAsString(value);
+        } catch (Exception exception) {
+            throw new IllegalArgumentException("Unable to serialize JSON value", exception);
+        }
     }
 
     private Map<String, Object> simulationRunGroup(UUID groupId) {

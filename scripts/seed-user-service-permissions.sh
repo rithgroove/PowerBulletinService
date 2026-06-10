@@ -111,7 +111,7 @@ BEGIN
             ('DECK_VERSION', 'Deck Version', 'Power Bulletin deck version records', ARRAY['INDEX','READ','CREATE','UPDATE','DELETE','ACTIVATE','DEACTIVATE']),
             ('DECK_ENTRY', 'Deck Entry', 'Power Bulletin deck entry records', ARRAY['INDEX','READ','CREATE','UPDATE','DELETE','ACTIVATE','DEACTIVATE']),
             ('PB_PRODUCT', 'Power Bulletin Product', 'Power Bulletin product records', ARRAY['INDEX','READ','CREATE','UPDATE','DELETE','ACTIVATE','DEACTIVATE']),
-            ('PB_RECORDS', 'Power Bulletin Records', 'Power Bulletin simulator run and metric records', ARRAY['INDEX','READ'])
+            ('PB_RECORDS', 'Power Bulletin Records', 'Power Bulletin simulator run and metric records', ARRAY['INDEX','READ','CREATE','UPDATE','DELETE'])
         ) AS seed(code, name, description, permissions)
     LOOP
         SELECT id INTO current_feature_id
