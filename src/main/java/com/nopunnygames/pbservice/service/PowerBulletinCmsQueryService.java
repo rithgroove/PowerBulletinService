@@ -644,10 +644,31 @@ public class PowerBulletinCmsQueryService {
         if (!tableExists("simulation_run_groups")) {
             return Map.of();
         }
+        markStaleRunningSimulationRunGroupsFailed();
         jdbcTemplate.update("""
                 UPDATE simulation_run_groups
                 SET approved_at = COALESCE(approved_at, CURRENT_TIMESTAMP)
                 WHERE id = ?
+                """, groupId);
+        return simulationRunGroup(groupId);
+    }
+
+    /**
+     * Resets one failed grouped simulation run back to pending queue status.
+     *
+     * @param groupId grouped run UUID
+     * @return updated grouped run row
+     */
+    public Map<String, Object> retrySimulationRunGroup(UUID groupId) {
+        if (!tableExists("simulation_run_groups")) {
+            return Map.of();
+        }
+        markStaleRunningSimulationRunGroupsFailed();
+        jdbcTemplate.update("""
+                UPDATE simulation_run_groups
+                SET queue_status = 'PENDING'
+                WHERE id = ?
+                  AND queue_status = 'FAILED'
                 """, groupId);
         return simulationRunGroup(groupId);
     }
@@ -751,6 +772,7 @@ public class PowerBulletinCmsQueryService {
         if (!tableExists("simulation_run_groups")) {
             return List.of();
         }
+        markStaleRunningSimulationRunGroupsFailed();
         List<Object> params = new ArrayList<>();
         StringBuilder where = new StringBuilder("WHERE 1 = 1");
         addSearch(where, params, search, "srg.deck_code", "COALESCE(di.name, srg.deck_name)", "srg.version_name");
@@ -1041,11 +1063,34 @@ public class PowerBulletinCmsQueryService {
         if (!tableExists("simulation_run_groups")) {
             return Map.of();
         }
+        markStaleRunningSimulationRunGroupsFailed();
         return jdbcTemplate.queryForMap("""
                 SELECT *
                 FROM simulation_run_groups
                 WHERE id = ?
                 """, groupId);
+    }
+
+    private void markStaleRunningSimulationRunGroupsFailed() {
+        if (!tableExists("simulation_run_groups")
+                || !columnExists("simulation_run_groups", "queue_status")
+                || !columnExists("simulation_run_groups", "claimed_at")
+                || !columnExists("simulation_run_groups", "failed_at")
+                || !columnExists("simulation_run_groups", "failure_message")) {
+            return;
+        }
+        jdbcTemplate.update("""
+                UPDATE simulation_run_groups
+                SET queue_status = 'FAILED',
+                    failed_at = CURRENT_TIMESTAMP,
+                    failure_message = COALESCE(
+                        failure_message,
+                        'Simulator worker did not finish within the allowed processing window.'
+                    )
+                WHERE queue_status = 'RUNNING'
+                  AND claimed_at IS NOT NULL
+                  AND claimed_at < ?
+                """, OffsetDateTime.now().minusHours(2));
     }
 
     private Map<String, Object> simulationRunGroupForRun(UUID runId) {

@@ -281,6 +281,61 @@ class PowerBulletinCmsQueryServiceTests {
         assertThat(detail.get("summary")).isEqualTo(Map.of());
     }
 
+    @Test
+    void groupedRunListMarksStaleRunningGroupFailed() {
+        UUID groupId = UUID.randomUUID();
+        createGroupedRunTables();
+        addGroupedRunQueueColumns();
+        jdbcTemplate.update("""
+                INSERT INTO simulation_run_groups (
+                    id, run_group_code, run_group_name, deck_code, requested_iterations_per_player_count,
+                    player_counts, created_at, queue_status, claimed_at
+                ) VALUES (?, 'GROUP_STALE', 'Stale Group', 'TEST_DECK_V1', 10, '[2,3,4]', ?, 'RUNNING', ?)
+                """,
+                groupId,
+                Timestamp.from(Instant.parse("2026-05-31T00:00:00Z")),
+                Timestamp.from(Instant.now().minusSeconds(7_201)));
+
+        List<Map<String, Object>> groups = queryService.listSimulationRunGroups("created_at", "desc", "", "", "");
+
+        assertThat(groups).hasSize(1);
+        assertThat(groups.getFirst()).containsEntry("queue_status", "FAILED");
+        assertThat(groups.getFirst().get("failed_at")).isNotNull();
+        assertThat(groups.getFirst().get("failure_message")).isNotNull();
+    }
+
+    @Test
+    void retrySimulationRunGroupOnlyChangesQueueStatus() {
+        UUID groupId = UUID.randomUUID();
+        createGroupedRunTables();
+        addGroupedRunQueueColumns();
+        jdbcTemplate.update("""
+                INSERT INTO simulation_run_groups (
+                    id, run_group_code, run_group_name, deck_code, requested_iterations_per_player_count,
+                    player_counts, created_at, notes, queue_status, queued_at, claimed_at,
+                    completed_at, failed_at, worker_id, failure_message
+                ) VALUES (?, 'GROUP_RETRY', 'Retry Group', 'TEST_DECK_V1', 10, '[2,3,4]', ?, 'Keep me',
+                    'FAILED', ?, ?, null, ?, 'worker-a', 'boom')
+                """,
+                groupId,
+                Timestamp.from(Instant.parse("2026-05-31T00:00:00Z")),
+                Timestamp.from(Instant.parse("2026-05-31T00:00:00Z")),
+                Timestamp.from(Instant.parse("2026-05-31T00:01:00Z")),
+                Timestamp.from(Instant.parse("2026-05-31T00:02:00Z")));
+
+        Map<String, Object> retried = queryService.retrySimulationRunGroup(groupId);
+
+        assertThat(retried)
+                .containsEntry("run_group_code", "GROUP_RETRY")
+                .containsEntry("notes", "Keep me")
+                .containsEntry("queue_status", "PENDING")
+                .containsEntry("worker_id", "worker-a")
+                .containsEntry("failure_message", "boom");
+        assertThat(retried.get("queued_at")).isEqualTo(Timestamp.from(Instant.parse("2026-05-31T00:00:00Z")));
+        assertThat(retried.get("claimed_at")).isEqualTo(Timestamp.from(Instant.parse("2026-05-31T00:01:00Z")));
+        assertThat(retried.get("failed_at")).isEqualTo(Timestamp.from(Instant.parse("2026-05-31T00:02:00Z")));
+    }
+
     @SuppressWarnings("unchecked")
     private List<Map<String, Object>> rows(Map<String, Object> detail, String key) {
         return (List<Map<String, Object>>) detail.get(key);
@@ -461,6 +516,16 @@ class PowerBulletinCmsQueryServiceTests {
                     created_at TIMESTAMP
                 )
                 """);
+    }
+
+    private void addGroupedRunQueueColumns() {
+        jdbcTemplate.execute("ALTER TABLE simulation_run_groups ADD COLUMN queue_status TEXT");
+        jdbcTemplate.execute("ALTER TABLE simulation_run_groups ADD COLUMN queued_at TIMESTAMP");
+        jdbcTemplate.execute("ALTER TABLE simulation_run_groups ADD COLUMN claimed_at TIMESTAMP");
+        jdbcTemplate.execute("ALTER TABLE simulation_run_groups ADD COLUMN completed_at TIMESTAMP");
+        jdbcTemplate.execute("ALTER TABLE simulation_run_groups ADD COLUMN failed_at TIMESTAMP");
+        jdbcTemplate.execute("ALTER TABLE simulation_run_groups ADD COLUMN worker_id TEXT");
+        jdbcTemplate.execute("ALTER TABLE simulation_run_groups ADD COLUMN failure_message TEXT");
     }
 
     private void createDeckEntryTables() {

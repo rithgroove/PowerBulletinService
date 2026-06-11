@@ -362,6 +362,25 @@ public class CmsQueryController {
     }
 
     /**
+     * Resets one failed grouped simulation run back to pending queue status.
+     *
+     * @param groupId grouped run UUID
+     * @param authentication Spring Security authentication
+     * @return updated grouped run row
+     */
+    @PatchMapping("/simulation-run-groups/{groupId}/retry")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> retrySimulationRunGroup(
+            @PathVariable UUID groupId,
+            Authentication authentication
+    ) {
+        ResponseEntity<ApiResponse<Map<String, Object>>> permissionCheck = checkPermission(authenticatedUser(authentication), "PB_RECORDS_UPDATE");
+        if (permissionCheck != null) {
+            return permissionCheck;
+        }
+        return ResponseEntity.ok(new ApiResponse<>(200, queryService.retrySimulationRunGroup(groupId)));
+    }
+
+    /**
      * Queues one grouped simulation run for an external simulator worker.
      *
      * @param request queue request
